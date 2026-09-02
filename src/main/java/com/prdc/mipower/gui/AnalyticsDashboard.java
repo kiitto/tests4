@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
@@ -1835,86 +1836,144 @@ public class AnalyticsDashboard {
         table.getItems().setAll(rows);
     }
 
+    private List<Bus> getAllActiveBuses() {
+        List<Bus> all = new ArrayList<>(baseResults != null ? baseResults.buses : List.of());
+        for (CaseStudy cs : activeSelectedCases) {
+            Out0Results res = solvedCases.get(cs.id);
+            if (res != null) {
+                all.addAll(res.buses);
+            }
+        }
+        return all;
+    }
+
+    private double[] parseIntervalBounds(String label) {
+        if (label == null || label.isEmpty()) return null;
+        String clean = label.replace("°", "").replace("%", "").trim();
+        if (clean.contains("to")) {
+            String[] parts = clean.split("to");
+            if (parts.length == 2) {
+                try {
+                    double lo = Double.parseDouble(parts[0].replace("+", "").trim());
+                    double hi = Double.parseDouble(parts[1].replace("+", "").trim());
+                    return new double[]{lo, hi};
+                } catch (Exception ignored) {}
+            }
+        }
+        String[] parts = clean.split("(?<=[0-9])\\s*[-–—]\\s*");
+        if (parts.length == 2) {
+            try {
+                double lo = Double.parseDouble(parts[0].replace("+", "").trim());
+                double hi = Double.parseDouble(parts[1].replace("+", "").trim());
+                return new double[]{lo, hi};
+            } catch (Exception ignored) {}
+        }
+        return null;
+    }
+
+    private boolean isLastBinLabel(String label) {
+        if (table != null && !table.getItems().isEmpty()) {
+            MetricRow last = table.getItems().get(table.getItems().size() - 1);
+            if (last != null && last.label != null && last.label.trim().equalsIgnoreCase(label.trim())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void handleChartElementClick(String binLabel, double countVal, String seriesName) {
         if (currentCategory == null || !"Voltage Profile Assessment".equals(currentCategory.group)) {
             return;
         }
 
+        Out0Results targetResults = baseResults;
+        if (seriesName != null && !seriesName.startsWith("Base") && !seriesName.contains("Ref")) {
+            for (CaseStudy cs : activeSelectedCases) {
+                if (seriesName.equals(cs.name) || seriesName.startsWith(cs.name)) {
+                    Out0Results res = solvedCases.get(cs.id);
+                    if (res != null) {
+                        targetResults = res;
+                        break;
+                    }
+                }
+            }
+        }
+
         List<Bus> matchingBuses = new ArrayList<>();
         String tabTitle = "Buses @ " + binLabel;
+        String cleanLabel = binLabel.trim();
 
         if ("voltage_profile".equals(currentCategory.id)) {
-            if ("<0.5".equals(binLabel) || binLabel.startsWith("<")) {
-                matchingBuses = baseResults.buses.stream().filter(b -> b.voltagePu < 0.5).collect(Collectors.toList());
+            if (cleanLabel.equals("<0.5") || cleanLabel.startsWith("<")) {
+                matchingBuses = targetResults.buses.stream()
+                        .filter(b -> b.voltagePu < 0.5 - 1e-7)
+                        .collect(Collectors.toList());
                 tabTitle = "Buses @ <0.5 p.u.";
-            } else if (binLabel.contains("-")) {
-                String[] parts = binLabel.split("-");
-                try {
-                    double lo = Double.parseDouble(parts[0].trim());
-                    double hi = Double.parseDouble(parts[1].trim());
-                    matchingBuses = baseResults.buses.stream().filter(b -> b.voltagePu >= lo && b.voltagePu < hi + 0.0001).collect(Collectors.toList());
-                } catch (Exception ignored) {
-                    matchingBuses = baseResults.buses;
-                }
-                tabTitle = "Buses @ " + binLabel + " p.u.";
             } else {
-                tabTitle = "Buses @ " + binLabel + " p.u.";
-                matchingBuses = baseResults.buses;
+                double[] bounds = parseIntervalBounds(cleanLabel);
+                if (bounds != null) {
+                    double bLo = bounds[0];
+                    double bHi = bounds[1];
+                    boolean isLast = isLastBinLabel(cleanLabel);
+                    matchingBuses = targetResults.buses.stream()
+                            .filter(b -> b.voltagePu >= 0.5 - 1e-7
+                                    && b.voltagePu >= bLo - 1e-7
+                                    && (isLast ? b.voltagePu <= bHi + 1e-7 : b.voltagePu < bHi - 1e-7))
+                            .collect(Collectors.toList());
+                } else {
+                    matchingBuses = targetResults.buses;
+                }
+                tabTitle = "Buses @ " + cleanLabel + " p.u.";
             }
         } else if ("voltage_violations".equals(currentCategory.id)) {
-            if (binLabel.contains("-")) {
-                String[] parts = binLabel.split("-");
-                try {
-                    double lo = Double.parseDouble(parts[0].trim());
-                    double hi = Double.parseDouble(parts[1].trim());
-                    matchingBuses = baseResults.buses.stream()
-                            .filter(b -> b.hasVoltageViolation() && b.voltagePu >= lo && b.voltagePu < hi + 0.0001)
-                            .collect(Collectors.toList());
-                } catch (Exception ignored) {
-                    matchingBuses = baseResults.buses.stream().filter(Bus::hasVoltageViolation).collect(Collectors.toList());
-                }
-                tabTitle = "Violations @ " + binLabel + " p.u.";
+            double[] bounds = parseIntervalBounds(cleanLabel);
+            if (bounds != null) {
+                double bLo = bounds[0];
+                double bHi = bounds[1];
+                boolean isLast = isLastBinLabel(cleanLabel);
+                matchingBuses = targetResults.buses.stream()
+                        .filter(b -> b.hasVoltageViolation()
+                                && b.voltagePu >= bLo - 1e-7
+                                && (isLast ? b.voltagePu <= bHi + 1e-7 : b.voltagePu < bHi - 1e-7))
+                        .collect(Collectors.toList());
             } else {
-                matchingBuses = baseResults.buses.stream().filter(Bus::hasVoltageViolation).collect(Collectors.toList());
-                tabTitle = "Violations @ " + binLabel;
+                matchingBuses = targetResults.buses.stream().filter(Bus::hasVoltageViolation).collect(Collectors.toList());
             }
+            tabTitle = "Violations @ " + cleanLabel + " p.u.";
         } else if ("angle_spread".equals(currentCategory.id)) {
-            if (binLabel.contains("to")) {
-                String[] parts = binLabel.replace("°", "").split("to");
-                try {
-                    double lo = Double.parseDouble(parts[0].trim());
-                    double hi = Double.parseDouble(parts[1].trim());
-                    matchingBuses = baseResults.buses.stream()
-                            .filter(b -> b.angleDeg >= lo && b.angleDeg < hi + 0.0001)
-                            .collect(Collectors.toList());
-                } catch (Exception ignored) {
-                    matchingBuses = baseResults.buses;
-                }
-                tabTitle = "Buses @ " + binLabel;
+            double[] bounds = parseIntervalBounds(cleanLabel);
+            if (bounds != null) {
+                double bLo = bounds[0];
+                double bHi = bounds[1];
+                boolean isLast = isLastBinLabel(cleanLabel);
+                matchingBuses = targetResults.buses.stream()
+                        .filter(b -> b.angleDeg >= bLo - 1e-7
+                                && (isLast ? b.angleDeg <= bHi + 1e-7 : b.angleDeg < bHi - 1e-7))
+                        .collect(Collectors.toList());
             } else {
-                tabTitle = "Buses @ " + binLabel;
-                matchingBuses = baseResults.buses;
+                matchingBuses = targetResults.buses;
             }
+            tabTitle = "Buses @ " + cleanLabel;
         } else if ("voltage_deviation".equals(currentCategory.id)) {
-            if (binLabel.contains("to")) {
-                String[] parts = binLabel.replace("%", "").replace("+", "").split("to");
-                try {
-                    double lo = Double.parseDouble(parts[0].trim());
-                    double hi = Double.parseDouble(parts[1].trim());
-                    matchingBuses = baseResults.buses.stream()
-                            .filter(b -> {
-                                double dev = (b.voltagePu - 1.0) * 100.0;
-                                return dev >= lo && dev < hi + 0.0001;
-                            })
-                            .collect(Collectors.toList());
-                } catch (Exception ignored) {
-                    matchingBuses = baseResults.buses;
-                }
-                tabTitle = "Buses @ " + binLabel;
+            double[] bounds = parseIntervalBounds(cleanLabel);
+            if (bounds != null) {
+                double bLo = bounds[0];
+                double bHi = bounds[1];
+                boolean isLast = isLastBinLabel(cleanLabel);
+                matchingBuses = targetResults.buses.stream()
+                        .filter(b -> {
+                            double dev = (b.voltagePu - 1.0) * 100.0;
+                            return dev >= bLo - 1e-7 && (isLast ? dev <= bHi + 1e-7 : dev < bHi - 1e-7);
+                        })
+                        .collect(Collectors.toList());
             } else {
-                tabTitle = "Buses @ " + binLabel;
-                matchingBuses = baseResults.buses;
+                matchingBuses = targetResults.buses;
             }
+            tabTitle = "Buses @ " + cleanLabel;
+        }
+
+        if (seriesName != null && !seriesName.startsWith("Base") && !seriesName.contains("Ref")) {
+            tabTitle += " (" + seriesName + ")";
         }
 
         openDrillDownTab(tabTitle, matchingBuses, currentCategory);
@@ -2768,61 +2827,68 @@ public class AnalyticsDashboard {
 
 
     private List<MetricRow> voltageProfileRows(Out0Results target, Out0Results scaleRef) {
-        double[] refV = scaleRef.buses.stream().mapToDouble(b -> b.voltagePu).toArray();
-        if (refV.length == 0) return List.of();
+        List<Bus> allBuses = getAllActiveBuses();
+        if (allBuses.isEmpty()) return List.of();
 
-        long countUnder05 = target.buses.stream().filter(b -> b.voltagePu < 0.5).count();
-        long refUnder05 = scaleRef.buses.stream().filter(b -> b.voltagePu < 0.5).count();
+        long targetUnder05 = target.buses.stream().filter(b -> b.voltagePu < 0.5 - 1e-7).count();
+        long anyUnder05 = allBuses.stream().filter(b -> b.voltagePu < 0.5 - 1e-7).count();
 
-        double min = Math.max(0.5, Arrays.stream(refV).filter(v -> v >= 0.5).min().orElse(0.9));
-        double max = Arrays.stream(refV).max().orElse(1.1);
+        List<Bus> normBuses = allBuses.stream().filter(b -> b.voltagePu >= 0.5 - 1e-7).collect(Collectors.toList());
+        double min = normBuses.stream().mapToDouble(b -> b.voltagePu).min().orElse(0.90);
+        double max = normBuses.stream().mapToDouble(b -> b.voltagePu).max().orElse(1.10);
         double bin = 0.02;
         double lo = Math.floor(min / bin) * bin;
         double hi = Math.ceil(max / bin) * bin;
         if (hi <= lo) hi = lo + bin;
         int nBins = Math.max(1, (int) Math.round((hi - lo) / bin));
-        int[] counts = new int[nBins];
-        for (Bus b : target.buses) {
-            if (b.voltagePu >= 0.5) {
-                int idx = (int) Math.floor((b.voltagePu - lo) / bin);
-                idx = Math.max(0, Math.min(nBins - 1, idx));
-                counts[idx]++;
-            }
-        }
+
         List<MetricRow> rows = new ArrayList<>();
-        if (countUnder05 > 0 || refUnder05 > 0) {
-            rows.add(new MetricRow("<0.5", (double) countUnder05));
+        if (anyUnder05 > 0) {
+            rows.add(new MetricRow("<0.5", (double) targetUnder05));
         }
+
         for (int i = 0; i < nBins; i++) {
-            double a = lo + i * bin;
-            rows.add(new MetricRow(String.format("%.2f-%.2f", a, a + bin), (double) counts[i]));
+            double bLo = lo + i * bin;
+            double bHi = bLo + bin;
+            boolean isLast = (i == nBins - 1);
+            long count = target.buses.stream()
+                    .filter(b -> b.voltagePu >= 0.5 - 1e-7
+                            && b.voltagePu >= bLo - 1e-7
+                            && (isLast ? b.voltagePu <= bHi + 1e-7 : b.voltagePu < bHi - 1e-7))
+                    .count();
+            rows.add(new MetricRow(String.format(Locale.US, "%.2f-%.2f", bLo, bHi), (double) count));
         }
         return rows;
     }
 
     private List<MetricRow> voltageViolationRows(Out0Results target, Out0Results scaleRef) {
-        List<Bus> violating = target.buses.stream().filter(Bus::hasVoltageViolation).collect(Collectors.toList());
-        List<Bus> refViolating = scaleRef.buses.stream().filter(Bus::hasVoltageViolation).collect(Collectors.toList());
-        if (violating.isEmpty() && refViolating.isEmpty()) {
-            return List.of();
-        }
-        double min = refViolating.stream().mapToDouble(b -> b.voltagePu).min().orElse(0.90);
-        double max = refViolating.stream().mapToDouble(b -> b.voltagePu).max().orElse(1.10);
+        List<Bus> allBuses = getAllActiveBuses();
+        List<Bus> allViolations = allBuses.stream().filter(Bus::hasVoltageViolation).collect(Collectors.toList());
+
+        double minV = allViolations.stream().mapToDouble(b -> b.voltagePu).min().orElse(0.90);
+        double maxV = allViolations.stream().mapToDouble(b -> b.voltagePu).max().orElse(1.10);
+
+        // Dynamically compute X-axis domain: [Math.min(min_violation, 0.90), Math.max(max_violation, 1.10)]
+        double domMin = Math.min(minV, 0.90);
+        double domMax = Math.max(maxV, 1.10);
+
         double bin = 0.02;
-        double lo = Math.floor(min / bin) * bin;
-        double hi = Math.ceil(max / bin) * bin;
+        double lo = Math.floor(domMin / bin) * bin;
+        double hi = Math.ceil(domMax / bin) * bin;
         if (hi <= lo) hi = lo + bin;
         int nBins = Math.max(1, (int) Math.round((hi - lo) / bin));
-        int[] counts = new int[nBins];
-        for (Bus b : violating) {
-            int idx = (int) Math.floor((b.voltagePu - lo) / bin);
-            idx = Math.max(0, Math.min(nBins - 1, idx));
-            counts[idx]++;
-        }
+
         List<MetricRow> rows = new ArrayList<>();
         for (int i = 0; i < nBins; i++) {
-            double a = lo + i * bin;
-            rows.add(new MetricRow(String.format("%.2f-%.2f", a, a + bin), (double) counts[i]));
+            double bLo = lo + i * bin;
+            double bHi = bLo + bin;
+            boolean isLast = (i == nBins - 1);
+            long count = target.buses.stream()
+                    .filter(b -> b.hasVoltageViolation()
+                            && b.voltagePu >= bLo - 1e-7
+                            && (isLast ? b.voltagePu <= bHi + 1e-7 : b.voltagePu < bHi - 1e-7))
+                    .count();
+            rows.add(new MetricRow(String.format(Locale.US, "%.2f-%.2f", bLo, bHi), (double) count));
         }
         return rows;
     }
@@ -2895,24 +2961,27 @@ public class AnalyticsDashboard {
     }
 
     private List<MetricRow> angleSpreadRows(Out0Results target, Out0Results scaleRef) {
-        if (target.buses.isEmpty()) return List.of();
-        double min = scaleRef.buses.stream().mapToDouble(b -> b.angleDeg).min().orElse(-30.0);
-        double max = scaleRef.buses.stream().mapToDouble(b -> b.angleDeg).max().orElse(30.0);
+        List<Bus> allBuses = getAllActiveBuses();
+        if (allBuses.isEmpty()) return List.of();
+
+        double min = allBuses.stream().mapToDouble(b -> b.angleDeg).min().orElse(-30.0);
+        double max = allBuses.stream().mapToDouble(b -> b.angleDeg).max().orElse(30.0);
         double bin = 5.0;
         double lo = Math.floor(min / bin) * bin;
         double hi = Math.ceil(max / bin) * bin;
         if (hi <= lo) hi = lo + bin;
         int nBins = Math.max(1, (int) Math.round((hi - lo) / bin));
-        int[] counts = new int[nBins];
-        for (Bus b : target.buses) {
-            int idx = (int) Math.floor((b.angleDeg - lo) / bin);
-            idx = Math.max(0, Math.min(nBins - 1, idx));
-            counts[idx]++;
-        }
+
         List<MetricRow> rows = new ArrayList<>();
         for (int i = 0; i < nBins; i++) {
-            double a = lo + i * bin;
-            rows.add(new MetricRow(String.format("%.0f° to %.0f°", a, a + bin), (double) counts[i]));
+            double bLo = lo + i * bin;
+            double bHi = bLo + bin;
+            boolean isLast = (i == nBins - 1);
+            long count = target.buses.stream()
+                    .filter(b -> b.angleDeg >= bLo - 1e-7
+                            && (isLast ? b.angleDeg <= bHi + 1e-7 : b.angleDeg < bHi - 1e-7))
+                    .count();
+            rows.add(new MetricRow(String.format(Locale.US, "%.0f° to %.0f°", bLo, bHi), (double) count));
         }
         return rows;
     }
@@ -3037,25 +3106,73 @@ public class AnalyticsDashboard {
     }
 
     private List<MetricRow> voltageDeviationRows(Out0Results target, Out0Results scaleRef) {
-        if (target.buses.isEmpty()) return List.of();
-        double min = scaleRef.buses.stream().mapToDouble(b -> (b.voltagePu - 1.0) * 100.0).min().orElse(-10.0);
-        double max = scaleRef.buses.stream().mapToDouble(b -> (b.voltagePu - 1.0) * 100.0).max().orElse(10.0);
-        double bin = 2.0;
-        double lo = Math.floor(min / bin) * bin;
-        double hi = Math.ceil(max / bin) * bin;
+        List<Bus> allBuses = getAllActiveBuses();
+        if (allBuses.isEmpty()) return List.of();
+
+        double minDev = allBuses.stream().mapToDouble(b -> (b.voltagePu - 1.0) * 100.0).min().orElse(-5.0);
+        double maxDev = allBuses.stream().mapToDouble(b -> (b.voltagePu - 1.0) * 100.0).max().orElse(5.0);
+        double span = maxDev - minDev;
+
+        // Dynamic linear / quantize scales derived from actual dataset bounds
+        double bin;
+        if (span <= 2.0) {
+            bin = 0.5;
+        } else if (span <= 6.0) {
+            bin = 1.0;
+        } else if (span <= 15.0) {
+            bin = 2.0;
+        } else if (span <= 30.0) {
+            bin = 5.0;
+        } else {
+            bin = 10.0;
+        }
+
+        double lo = Math.floor(minDev / bin) * bin;
+        double hi = Math.ceil(maxDev / bin) * bin;
         if (hi <= lo) hi = lo + bin;
         int nBins = Math.max(1, (int) Math.round((hi - lo) / bin));
-        int[] counts = new int[nBins];
-        for (Bus b : target.buses) {
-            double dev = (b.voltagePu - 1.0) * 100.0;
-            int idx = (int) Math.floor((dev - lo) / bin);
-            idx = Math.max(0, Math.min(nBins - 1, idx));
-            counts[idx]++;
-        }
-        List<MetricRow> rows = new ArrayList<>();
+
+        // Find populated range across all active cases to eliminate empty outer "dead zones"
+        int firstPopulated = -1;
+        int lastPopulated = -1;
+
         for (int i = 0; i < nBins; i++) {
-            double a = lo + i * bin;
-            rows.add(new MetricRow(String.format("%+.0f%% to %+.0f%%", a, a + bin), (double) counts[i]));
+            double bLo = lo + i * bin;
+            double bHi = bLo + bin;
+            boolean isLast = (i == nBins - 1);
+            long totalInBin = allBuses.stream()
+                    .filter(b -> {
+                        double dev = (b.voltagePu - 1.0) * 100.0;
+                        return dev >= bLo - 1e-7 && (isLast ? dev <= bHi + 1e-7 : dev < bHi - 1e-7);
+                    })
+                    .count();
+            if (totalInBin > 0) {
+                if (firstPopulated == -1) firstPopulated = i;
+                lastPopulated = i;
+            }
+        }
+
+        if (firstPopulated == -1) {
+            firstPopulated = 0;
+            lastPopulated = Math.min(0, nBins - 1);
+        }
+
+        List<MetricRow> rows = new ArrayList<>();
+        for (int i = firstPopulated; i <= lastPopulated; i++) {
+            double bLo = lo + i * bin;
+            double bHi = bLo + bin;
+            boolean isLast = (i == lastPopulated);
+            long count = target.buses.stream()
+                    .filter(b -> {
+                        double dev = (b.voltagePu - 1.0) * 100.0;
+                        return dev >= bLo - 1e-7 && (isLast ? dev <= bHi + 1e-7 : dev < bHi - 1e-7);
+                    })
+                    .count();
+
+            String label = (bin >= 1.0 && bin == Math.rint(bin))
+                    ? String.format(Locale.US, "%+.0f%% to %+.0f%%", bLo, bHi)
+                    : String.format(Locale.US, "%+.1f%% to %+.1f%%", bLo, bHi);
+            rows.add(new MetricRow(label, (double) count));
         }
         return rows;
     }
