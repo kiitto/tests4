@@ -36,6 +36,7 @@ import javafx.scene.chart.StackedAreaChart;
 import javafx.scene.chart.XYChart;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -153,11 +154,10 @@ public class AnalyticsDashboard {
     public static final String CHART_CORRELATION = "Correlation Plot";
     public static final String CHART_RADAR = "Radar / Spider Chart";
     public static final String CHART_PIE = "Pie / Donut Chart";
-    public static final String CHART_3D = "3D Interactive Visualization";
 
     private static final List<String> ALL_CHART_TYPES = List.of(
             CHART_BAR, CHART_STACKED_BAR, CHART_LINE, CHART_AREA,
-            CHART_SCATTER, CHART_RADAR, CHART_PIE, CHART_3D
+            CHART_SCATTER, CHART_RADAR, CHART_PIE
     );
 
     public AnalyticsDashboard(List<CaseStudy> caseStudies, CaseStudyManager manager) {
@@ -556,11 +556,24 @@ public class AnalyticsDashboard {
 
     private void closeTab(int index) {
         if (vizTabs.size() <= 1) return;
-        vizTabs.remove(index);
-        if (activeTabIndex >= vizTabs.size()) {
-            activeTabIndex = vizTabs.size() - 1;
+
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Close Chart Visualization");
+        alert.setHeaderText(null);
+        alert.setContentText("Are you sure you want to close this chart visualization?");
+
+        ButtonType confirmBtn = new ButtonType("Confirm", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelBtn = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(confirmBtn, cancelBtn);
+
+        Optional<ButtonType> result = alert.showAndWait();
+        if (result.isPresent() && result.get() == confirmBtn) {
+            vizTabs.remove(index);
+            if (activeTabIndex >= vizTabs.size()) {
+                activeTabIndex = vizTabs.size() - 1;
+            }
+            switchToTab(activeTabIndex);
         }
-        switchToTab(activeTabIndex);
     }
 
     // ------------------------------------------------------------------- //
@@ -605,18 +618,6 @@ public class AnalyticsDashboard {
             if (currentCategory != null) renderCategory(currentCategory);
         });
 
-        Button rotate3DBtn = new Button("🔄 Rotate in 3D Mode");
-        rotate3DBtn.setTooltip(new Tooltip("Switch to 3D State Space mode to orbit 360° and inspect overlapping & backside points"));
-        rotate3DBtn.setStyle("-fx-background-color: #4F46E5; -fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 11.5px; "
-                + "-fx-background-radius: 6; -fx-cursor: hand; -fx-padding: 5 10;");
-        rotate3DBtn.setOnAction(e -> {
-            chartTypeCombo.setValue(CHART_3D);
-            if (activeTabIndex >= 0 && activeTabIndex < vizTabs.size()) {
-                vizTabs.get(activeTabIndex).chartType = CHART_3D;
-            }
-            if (currentCategory != null) renderCategory(currentCategory);
-        });
-
         showValuesCb = new CheckBox("Value Labels");
         showValuesCb.setSelected(showValueLabels);
         showValuesCb.setStyle("-fx-font-size: 11px; -fx-font-weight: 600; -fx-text-fill: #334155;");
@@ -629,7 +630,7 @@ public class AnalyticsDashboard {
             if (currentCategory != null) renderCategory(currentCategory);
         });
 
-        chartTypeGroup.getChildren().addAll(chartTypeLabel, chartTypeCombo, rotate3DBtn, showValuesCb);
+        chartTypeGroup.getChildren().addAll(chartTypeLabel, chartTypeCombo, showValuesCb);
 
         // 2. Zoom Controls Pill
         HBox zoomGroup = new HBox(4);
@@ -735,6 +736,7 @@ public class AnalyticsDashboard {
         ScrollPane chartScroll = new ScrollPane(chartHost);
         chartScroll.setFitToWidth(true);
         chartScroll.setFitToHeight(true);
+        chartScroll.setPannable(false);
         chartScroll.setStyle("-fx-background-color: transparent; -fx-border-color: #E2E8F0; -fx-border-radius: 8;");
         chartScroll.setPrefHeight(440);
 
@@ -769,15 +771,22 @@ public class AnalyticsDashboard {
     private void enablePanDragging(Node node) {
         final double[] dragContext = new double[2];
         node.setOnMousePressed(e -> {
-            if (e.isSecondaryButtonDown() || e.isMiddleButtonDown()) {
-                dragContext[0] = e.getSceneX() - node.getTranslateX();
-                dragContext[1] = e.getSceneY() - node.getTranslateY();
-            }
+            dragContext[0] = e.getSceneX() - node.getTranslateX();
+            dragContext[1] = e.getSceneY() - node.getTranslateY();
+            node.setCursor(javafx.scene.Cursor.MOVE);
         });
         node.setOnMouseDragged(e -> {
-            if (e.isSecondaryButtonDown() || e.isMiddleButtonDown()) {
-                node.setTranslateX(e.getSceneX() - dragContext[0]);
-                node.setTranslateY(e.getSceneY() - dragContext[1]);
+            node.setTranslateX(e.getSceneX() - dragContext[0]);
+            node.setTranslateY(e.getSceneY() - dragContext[1]);
+        });
+        node.setOnMouseReleased(e -> {
+            node.setCursor(javafx.scene.Cursor.DEFAULT);
+        });
+        node.setOnMouseClicked(e -> {
+            if (e.getClickCount() == 2) {
+                node.setTranslateX(0);
+                node.setTranslateY(0);
+                if (zoomSlider != null) zoomSlider.setValue(1.0);
             }
         });
     }
@@ -1219,17 +1228,14 @@ public class AnalyticsDashboard {
             return empty;
         }
 
-        if (CHART_3D.equals(chartType)) {
-            return build3DVisualization(category);
-        }
         if (CHART_PIE.equals(chartType)) {
-            return wrapRotatable(buildPieChart(rows, category.unit));
+            return buildPieChart(rows, category.unit);
         }
         if (CHART_RADAR.equals(chartType)) {
-            return wrapRotatable(buildRadarChart(rows, category.unit));
+            return buildRadarChart(rows, category.unit);
         }
         if (CHART_CORRELATION.equals(chartType)) {
-            return wrapRotatable(buildCorrelationChart(rows, category));
+            return buildCorrelationChart(rows, category);
         }
 
         CategoryAxis xAxis = new CategoryAxis();
@@ -1305,147 +1311,7 @@ public class AnalyticsDashboard {
         wrapper.getChildren().addAll(chart, overlay);
 
         attachVisibleNumericLabels(chart, overlay);
-        return wrapRotatable(wrapper);
-    }
-
-    /**
-     * Wraps any Node in a rotatable 3D-perspective container.
-     * Users can drag-rotate (left-right = Y rotation, up-down = X rotation)
-     * to inspect occluded / overlapping data points from any angle.
-     */
-    private Node wrapRotatable(Node content) {
-        javafx.scene.transform.Rotate rx = new javafx.scene.transform.Rotate(0, javafx.scene.transform.Rotate.X_AXIS);
-        javafx.scene.transform.Rotate ry = new javafx.scene.transform.Rotate(0, javafx.scene.transform.Rotate.Y_AXIS);
-        content.getTransforms().addAll(rx, ry);
-
-        final double[] mouse = new double[2];
-
-        // Drag to rotate
-        content.setOnMousePressed(e -> {
-            mouse[0] = e.getSceneX();
-            mouse[1] = e.getSceneY();
-        });
-        content.setOnMouseDragged(e -> {
-            double dx = e.getSceneX() - mouse[0];
-            double dy = e.getSceneY() - mouse[1];
-            ry.setAngle(ry.getAngle() + dx * 0.35);
-            rx.setAngle(Math.max(-75, Math.min(75, rx.getAngle() - dy * 0.35)));
-            mouse[0] = e.getSceneX();
-            mouse[1] = e.getSceneY();
-        });
-
-        // Reset on double-click
-        content.setOnMouseClicked(e -> {
-            if (e.getClickCount() == 2) {
-                rx.setAngle(0);
-                ry.setAngle(0);
-            }
-        });
-
-        return content;
-    }
-
-    private Node build3DVisualization(Category category) {
-        List<ThreeDViewPane.DataPoint3D> points = new ArrayList<>();
-
-        if ("voltage_profile".equals(category.id) || "voltage_violations".equals(category.id)
-                || "angle_spread".equals(category.id) || "voltage_deviation".equals(category.id)) {
-            // Bus Voltage & Stability 3D State: Voltage vs Angle vs Apparent Load
-            for (Bus b : baseResults.buses) {
-                double mva = Math.hypot(b.mwLoad, b.mvarLoad);
-                points.add(new ThreeDViewPane.DataPoint3D(
-                        "[Base] " + b.number + " " + b.name,
-                        b.voltagePu,
-                        b.angleDeg,
-                        mva,
-                        b.hasVoltageViolation()
-                ));
-            }
-            for (CaseStudy cs : activeSelectedCases) {
-                Out0Results res = solvedCases.get(cs.id);
-                if (res != null) {
-                    for (Bus b : res.buses) {
-                        double mva = Math.hypot(b.mwLoad, b.mvarLoad);
-                        points.add(new ThreeDViewPane.DataPoint3D(
-                                "[" + cs.name + "] " + b.number + " " + b.name,
-                                b.voltagePu,
-                                b.angleDeg,
-                                mva,
-                                b.hasVoltageViolation()
-                        ));
-                    }
-                }
-            }
-            return new ThreeDViewPane("Bus 3D Stability State: Voltage (p.u.) vs Phase Angle (°) vs Demand (MVA)",
-                    "Voltage (p.u.)", "Phase Angle (°)", "Load (MVA)", points);
-
-        } else if ("generation_dist".equals(category.id) || "load_dist".equals(category.id)
-                || "power_factor".equals(category.id) || "reactive_balance".equals(category.id)
-                || "bus_mva_intensity".equals(category.id) || "power_balance".equals(category.id)
-                || "convergence".equals(category.id)) {
-            // Bus Power & Reactive Margin 3D State: MW vs MVAr vs Voltage
-            for (Bus b : baseResults.buses) {
-                points.add(new ThreeDViewPane.DataPoint3D(
-                        "[Base] " + b.number + " " + b.name,
-                        b.mwLoad > 0 ? b.mwLoad : b.mwGeneration,
-                        b.mvarLoad - b.mvarGeneration,
-                        b.voltagePu,
-                        b.hasVoltageViolation()
-                ));
-            }
-            for (CaseStudy cs : activeSelectedCases) {
-                Out0Results res = solvedCases.get(cs.id);
-                if (res != null) {
-                    for (Bus b : res.buses) {
-                        points.add(new ThreeDViewPane.DataPoint3D(
-                                "[" + cs.name + "] " + b.number + " " + b.name,
-                                b.mwLoad > 0 ? b.mwLoad : b.mwGeneration,
-                                b.mvarLoad - b.mvarGeneration,
-                                b.voltagePu,
-                                b.hasVoltageViolation()
-                        ));
-                    }
-                }
-            }
-            return new ThreeDViewPane("Bus 3D Power Flow State: Real Power (MW) vs Net Reactive (MVAr) vs Voltage (p.u.)",
-                    "Power (MW)", "Net Q (MVAr)", "Voltage (p.u.)", points);
-
-        } else {
-            // Branch & Thermal Loading 3D State: % Loading vs MW Flow vs Voltage
-            for (Branch b : baseResults.branches()) {
-                double vPu = baseResults.buses.stream()
-                        .filter(bus -> bus.number == b.fromBus)
-                        .mapToDouble(bus -> bus.voltagePu)
-                        .findFirst().orElse(1.0);
-                points.add(new ThreeDViewPane.DataPoint3D(
-                        "[Base] " + b.getKind() + " " + b.fromBus + "->" + b.toBus,
-                        b.loadingPercent,
-                        Math.abs(b.mwFlow),
-                        vPu,
-                        b.isOverloaded()
-                ));
-            }
-            for (CaseStudy cs : activeSelectedCases) {
-                Out0Results res = solvedCases.get(cs.id);
-                if (res != null) {
-                    for (Branch b : res.branches()) {
-                        double vPu = res.buses.stream()
-                                .filter(bus -> bus.number == b.fromBus)
-                                .mapToDouble(bus -> bus.voltagePu)
-                                .findFirst().orElse(1.0);
-                        points.add(new ThreeDViewPane.DataPoint3D(
-                                "[" + cs.name + "] " + b.getKind() + " " + b.fromBus + "->" + b.toBus,
-                                b.loadingPercent,
-                                Math.abs(b.mwFlow),
-                                vPu,
-                                b.isOverloaded()
-                        ));
-                    }
-                }
-            }
-            return new ThreeDViewPane("Branch 3D State: Thermal Loading (%) vs Power Flow (MW) vs Voltage (p.u.)",
-                    "% Loading", "MW Flow", "Voltage (p.u.)", points);
-        }
+        return wrapper;
     }
 
     private Node buildPieChart(List<MetricRow> rows, String unit) {
@@ -2078,98 +1944,203 @@ public class AnalyticsDashboard {
         };
         categories.add(lineLoading);
 
-        // 3. Loss Analysis (Real Power Losses, Active Power Losses, Reactive Power Losses)
-        Category branchLosses = new Category();
-        branchLosses.id = "branch_losses";
-        branchLosses.shortName = "Real Losses";
-        branchLosses.group = "Loss Analysis";
-        branchLosses.title = "Real Power Losses by Branch (Top Contributors)";
-        branchLosses.axisLabel = "Branch (From -> To)";
-        branchLosses.unit = "MW loss";
-        branchLosses.dat0Table = "Section 1.5 % Transmission Lines (Columns: Series Resistance R in p.u., Reactance X in p.u.)";
-        branchLosses.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Columns: MW LOSS = P_from + P_to)";
-        branchLosses.formulaProof = "P_loss = 3 × I² × R = ((P² + Q²) / V²) × R  [Joule Heating Dissipation].";
-        branchLosses.sourceColumns = "LINE & TRANSFORMER FLOWS -> MW Loss";
-        branchLosses.scalingSource = "Base Case I²R Joule heating losses";
-        branchLosses.description = "Ranks equipment causing greatest transmission energy losses.";
-        branchLosses.healthyRange = "< 3.0% to 5.0% of total system generation (Low Joule dissipation)";
-        branchLosses.simpleExplanation = "Pinpoints lines where energy is wasted as heat due to conductor resistance and high currents. Upgrading conductors or balancing reactive power on these lines recovers lost revenue and reduces generator fuel consumption.";
-        branchLosses.action = "Prime targets for conductor upgrades, phase balancing, or voltage boosting to reduce system losses.";
-        branchLosses.topN = 15;
-        branchLosses.rowsFn = (r, ref) -> branchRankRows(r, b -> b.mwLoss);
-        categories.add(branchLosses);
-
-        Category lossIntensity = new Category();
-        lossIntensity.id = "loss_intensity";
-        lossIntensity.shortName = "Active Losses";
-        lossIntensity.group = "Loss Analysis";
-        lossIntensity.title = "Active Power Loss Intensity per Branch (Top Joule-Heating Bottlenecks)";
-        lossIntensity.axisLabel = "Branch (From -> To)";
-        lossIntensity.unit = "MW loss";
-        lossIntensity.dat0Table = "Section 1.5 % Transmission Lines (Columns: Series Resistance R in p.u.)";
-        lossIntensity.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Columns: FROM, TO, MW LOSS = P_ij + P_ji)";
-        lossIntensity.formulaProof = "P_loss_ij = I_ij² × R_ij = ((P_ij² + Q_ij²) / V_i²) × R_ij.  Loss Share % = (P_loss_ij / P_loss_system_total) × 100%.";
-        lossIntensity.sourceColumns = "LINE & TRANSFORMER FLOWS -> MW Loss";
-        lossIntensity.scalingSource = "Base Case branch I²R losses";
-        lossIntensity.description = "Pinpoints individual equipment causing greatest transmission energy losses through Joule heating (I²R). High loss indicates heavy current density or excessive conductor resistance.";
-        lossIntensity.healthyRange = "Top 5 branches contribute < 25% of total transmission losses";
-        lossIntensity.simpleExplanation = "Identifies the exact transmission branches dissipating the greatest percentage of system losses. Highlights where conductor replacement or reactive power injection will yield the highest return on investment.";
-        lossIntensity.action = "Prioritize for reconductoring (HTLS conductors), voltage boosting, or reactive compensation (reducing reactive current component reduces I²R loss).";
-        lossIntensity.topN = 20;
-        lossIntensity.rowsFn = this::lossIntensityRows;
-        lossIntensity.insightFn = (base, cases) -> {
-            double totalLoss = base.branches().stream().mapToDouble(b -> b.mwLoss).sum();
-            var top = base.branches().stream().max((a, b) -> Double.compare(a.mwLoss, b.mwLoss));
-            return top.map(b -> String.format("Top loss branch: %s %d->%d dissipating %.2f MW (%.1f%% of total %.2f MW branch losses).",
-                    b.getKind(), b.fromBus, b.toBus, b.mwLoss, (b.mwLoss / Math.max(totalLoss, 0.001)) * 100.0, totalLoss))
-                    .orElse("No branch loss data available.");
+        // 3. Loss Analysis (Real Power Losses, Active Power Losses, Reactive Power Losses — Split Lines vs Transformers)
+        Category lineRealLosses = new Category();
+        lineRealLosses.id = "line_real_losses";
+        lineRealLosses.shortName = "Line Real Loss";
+        lineRealLosses.group = "Loss Analysis";
+        lineRealLosses.title = "Transmission Line Real Power Losses (MW)";
+        lineRealLosses.axisLabel = "Line (From -> To)";
+        lineRealLosses.unit = "MW loss";
+        lineRealLosses.dat0Table = "Section 1.5 % Transmission Lines (Columns: Line R in p.u., Reactance X in p.u.)";
+        lineRealLosses.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Kind = Line, MW LOSS = P_from + P_to)";
+        lineRealLosses.formulaProof = "P_loss = 3 × I² × R = ((P² + Q²) / V²) × R  [Joule Heating Dissipation in Lines].";
+        lineRealLosses.sourceColumns = "LINE FLOWS -> MW Loss";
+        lineRealLosses.scalingSource = "Base Case Line I²R Joule heating losses";
+        lineRealLosses.description = "Ranks transmission lines causing greatest energy dissipation through conductor resistance.";
+        lineRealLosses.healthyRange = "Top line < 10.0 MW loss";
+        lineRealLosses.simpleExplanation = "Identifies transmission lines wasting power as heat due to high resistance and current. Upgrading conductors or reducing reactive flows recovers lost transmission revenue.";
+        lineRealLosses.action = "Prime targets for HTLS conductor upgrades, phase balancing, or voltage boosting to minimize grid transmission losses.";
+        lineRealLosses.topN = 20;
+        lineRealLosses.rowsFn = this::lineRealLossRows;
+        lineRealLosses.insightFn = (base, cases) -> {
+            double totalLoss = base.branches().stream().filter(b -> "Line".equalsIgnoreCase(b.getKind())).mapToDouble(b -> b.mwLoss).sum();
+            var top = base.branches().stream().filter(b -> "Line".equalsIgnoreCase(b.getKind())).max((a, b) -> Double.compare(a.mwLoss, b.mwLoss));
+            return top.map(b -> String.format("Top loss transmission line: %d->%d dissipating %.2f MW (%.1f%% of total %.2f MW line losses).",
+                    b.fromBus, b.toBus, b.mwLoss, (b.mwLoss / Math.max(totalLoss, 0.001)) * 100.0, totalLoss))
+                    .orElse("No line loss data available.");
         };
-        categories.add(lossIntensity);
+        categories.add(lineRealLosses);
 
-        Category reactiveLosses = new Category();
-        reactiveLosses.id = "reactive_losses";
-        reactiveLosses.shortName = "Reactive Losses";
-        reactiveLosses.group = "Loss Analysis";
-        reactiveLosses.title = "Reactive Power Losses by Branch (Top Contributors)";
-        reactiveLosses.axisLabel = "Branch (From->To)";
-        reactiveLosses.unit = "MVAr loss";
-        reactiveLosses.dat0Table = "Section 1.5 % Total Lines (Columns: Line Reactance X in p.u., Charging Susceptance B in p.u.)";
-        reactiveLosses.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Columns: MVAR LOSS = Q_from + Q_to)";
-        reactiveLosses.formulaProof = "Q_loss = 3 × I² × X - V² × B  [Net Reactive Inductive Consumption minus Capacitive Charging].";
-        reactiveLosses.sourceColumns = "LINE & TRANSFORMER FLOWS -> MVAr Loss";
-        reactiveLosses.scalingSource = "Base Case reactive loss (2IX²/V² consumption per branch)";
-        reactiveLosses.description = "Ranks equipment causing the highest reactive power losses in the network.";
-        reactiveLosses.healthyRange = "Low inductive VAr consumption (Series capacitor cancellation)";
-        reactiveLosses.simpleExplanation = "Shows lines that consume high amounts of magnetic energy (reactive power). High reactive losses burden generators and drop receiving substation voltages.";
-        reactiveLosses.action = "High reactive losses indicate long-distance reactive power transport — fundamentally inefficient. Series capacitors cancel inductive reactance (reducing IX reactive loss). Distributed VAr sources (SVCs, STATCOMs, capacitor banks) near reactive load centers are the engineering solution.";
-        reactiveLosses.topN = 15;
-        reactiveLosses.rowsFn = this::reactiveLossRows;
-        reactiveLosses.insightFn = (base, cases) -> {
-            double totalQloss = base.branches().stream().mapToDouble(b -> b.mvarLoss).sum();
-            return String.format("Total reactive losses: %.1f MVAr. These losses must be supplied by generators or shunt capacitors, increasing reactive generation burden and reducing voltage margins across the network.", totalQloss);
+        Category xfmrRealLosses = new Category();
+        xfmrRealLosses.id = "xfmr_real_losses";
+        xfmrRealLosses.shortName = "XFMR Real Loss";
+        xfmrRealLosses.group = "Loss Analysis";
+        xfmrRealLosses.title = "Transformer Real Power Losses (MW)";
+        xfmrRealLosses.axisLabel = "Transformer (From -> To)";
+        xfmrRealLosses.unit = "MW loss";
+        xfmrRealLosses.dat0Table = "Section 1.3 % Transformers (Columns: Copper Loss R in p.u., Core Loss G in p.u.)";
+        xfmrRealLosses.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Kind = Transformer, MW LOSS)";
+        xfmrRealLosses.formulaProof = "P_loss_xfmr = I² R_copper + V² G_core  [Winding Copper + Core Iron Losses].";
+        xfmrRealLosses.sourceColumns = "TRANSFORMER FLOWS -> MW Loss";
+        xfmrRealLosses.scalingSource = "Base Case transformer copper and core losses";
+        xfmrRealLosses.description = "Ranks substation power transformers by active real power losses.";
+        xfmrRealLosses.healthyRange = "Transformer efficiency > 98.5% (Low winding copper dissipation)";
+        xfmrRealLosses.simpleExplanation = "Measures energy lost as heat within transformer copper windings and magnetic core. Overloaded transformers exhibit steep quadratic increases in copper losses.";
+        xfmrRealLosses.action = "High loss transformers indicate chronic overloading or excessive winding resistance. Consider tap adjustment, parallel transformer loading, or replacement with high-efficiency units.";
+        xfmrRealLosses.topN = 20;
+        xfmrRealLosses.rowsFn = this::xfmrRealLossRows;
+        xfmrRealLosses.insightFn = (base, cases) -> {
+            double totalLoss = base.branches().stream().filter(b -> "Transformer".equalsIgnoreCase(b.getKind())).mapToDouble(b -> b.mwLoss).sum();
+            var top = base.branches().stream().filter(b -> "Transformer".equalsIgnoreCase(b.getKind())).max((a, b) -> Double.compare(a.mwLoss, b.mwLoss));
+            return top.map(b -> String.format("Top loss transformer: %d->%d dissipating %.2f MW (%.1f%% of total %.2f MW transformer losses).",
+                    b.fromBus, b.toBus, b.mwLoss, (b.mwLoss / Math.max(totalLoss, 0.001)) * 100.0, totalLoss))
+                    .orElse("No transformer loss data available.");
         };
-        categories.add(reactiveLosses);
+        categories.add(xfmrRealLosses);
 
-        // 4. Power Flow & Transfers
-        Category branchFlow = new Category();
-        branchFlow.id = "branch_flow";
-        branchFlow.shortName = "MW Corridors";
-        branchFlow.group = "Power Flow & Transfers";
-        branchFlow.title = "Real Power Flow by Branch (Backbone Corridors)";
-        branchFlow.axisLabel = "Branch (From -> To)";
-        branchFlow.unit = "MW";
-        branchFlow.dat0Table = "Section 1.5 % Transmission Lines (Columns: Line R, X, B, FromBus, ToBus)";
-        branchFlow.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Columns: FROM, TO, MW FLOW, MVAR FLOW)";
-        branchFlow.formulaProof = "P_ij = V_i² G_ij - V_i V_j (G_ij cos θ_ij + B_ij sin θ_ij)  [AC Power Flow Transfer Equation].";
-        branchFlow.sourceColumns = "LINE & TRANSFORMER FLOWS -> MW Flow";
-        branchFlow.scalingSource = "Base Case solved power flow magnitudes";
-        branchFlow.description = "Identifies primary energy transfer corridors carrying the highest bulk MW flows.";
-        branchFlow.healthyRange = "Balanced corridor flows (No single corridor >500 MW single point of failure)";
-        branchFlow.simpleExplanation = "Identifies the power grid's major highways (bulk transmission corridors) transferring energy from generators to cities and industrial zones. A fault on one of these backbone lines has massive system-wide impact.";
-        branchFlow.action = "Critical paths for N-1 contingency monitoring; loss of these corridors has maximum network impact.";
-        branchFlow.topN = 15;
-        branchFlow.rowsFn = (r, ref) -> branchRankRows(r, b -> Math.abs(b.mwFlow));
-        categories.add(branchFlow);
+        Category lineLossIntensity = new Category();
+        lineLossIntensity.id = "line_loss_intensity";
+        lineLossIntensity.shortName = "Line Active Loss";
+        lineLossIntensity.group = "Loss Analysis";
+        lineLossIntensity.title = "Transmission Line Active Power Loss Intensity (MW)";
+        lineLossIntensity.axisLabel = "Line (From -> To)";
+        lineLossIntensity.unit = "MW loss";
+        lineLossIntensity.dat0Table = "Section 1.5 % Transmission Lines (Columns: Series Resistance R in p.u.)";
+        lineLossIntensity.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Kind = Line, MW LOSS = P_ij + P_ji)";
+        lineLossIntensity.formulaProof = "P_loss_ij = I_ij² × R_ij = ((P_ij² + Q_ij²) / V_i²) × R_ij.";
+        lineLossIntensity.sourceColumns = "LINE FLOWS -> MW Loss";
+        lineLossIntensity.scalingSource = "Base Case transmission line I²R losses";
+        lineLossIntensity.description = "Pinpoints individual transmission lines causing greatest loss bottlenecks.";
+        lineLossIntensity.healthyRange = "Top 5 lines contribute < 30% of total line losses";
+        lineLossIntensity.simpleExplanation = "Pinpoints lines carrying excessive current density relative to their conductor size.";
+        lineLossIntensity.action = "Reconductor with larger or composite-core conductors, or redistribute power flow to parallel corridors.";
+        lineLossIntensity.topN = 20;
+        lineLossIntensity.rowsFn = this::lineLossIntensityRows;
+        lineLossIntensity.insightFn = (base, cases) -> {
+            double totalLoss = base.branches().stream().filter(b -> "Line".equalsIgnoreCase(b.getKind())).mapToDouble(b -> b.mwLoss).sum();
+            var top = base.branches().stream().filter(b -> "Line".equalsIgnoreCase(b.getKind())).max((a, b) -> Double.compare(a.mwLoss, b.mwLoss));
+            return top.map(b -> String.format("Highest loss line corridor: LINE %d->%d dissipating %.2f MW (%.1f%% of total line losses).",
+                    b.fromBus, b.toBus, b.mwLoss, (b.mwLoss / Math.max(totalLoss, 0.001)) * 100.0))
+                    .orElse("No line loss data available.");
+        };
+        categories.add(lineLossIntensity);
+
+        Category xfmrLossIntensity = new Category();
+        xfmrLossIntensity.id = "xfmr_loss_intensity";
+        xfmrLossIntensity.shortName = "XFMR Active Loss";
+        xfmrLossIntensity.group = "Loss Analysis";
+        xfmrLossIntensity.title = "Transformer Active Power Loss Intensity (MW)";
+        xfmrLossIntensity.axisLabel = "Transformer (From -> To)";
+        xfmrLossIntensity.unit = "MW loss";
+        xfmrLossIntensity.dat0Table = "Section 1.3 % Transformers (Columns: Series Resistance R in p.u.)";
+        xfmrLossIntensity.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Kind = Transformer, MW LOSS = P_ij + P_ji)";
+        xfmrLossIntensity.formulaProof = "P_loss_xfmr = ((P² + Q²) / V²) × R_winding.";
+        xfmrLossIntensity.sourceColumns = "TRANSFORMER FLOWS -> MW Loss";
+        xfmrLossIntensity.scalingSource = "Base Case transformer winding I²R losses";
+        xfmrLossIntensity.description = "Pinpoints transformers experiencing heavy active power dissipation.";
+        xfmrLossIntensity.healthyRange = "Top transformer loss < 2.0% of unit MVA rating";
+        xfmrLossIntensity.simpleExplanation = "Highlights transformers generating high heat dissipation due to high through-flow.";
+        xfmrLossIntensity.action = "Rebalance substation loads or adjust tap ratios to alleviate thermal stress.";
+        xfmrLossIntensity.topN = 20;
+        xfmrLossIntensity.rowsFn = this::xfmrLossIntensityRows;
+        xfmrLossIntensity.insightFn = (base, cases) -> {
+            double totalLoss = base.branches().stream().filter(b -> "Transformer".equalsIgnoreCase(b.getKind())).mapToDouble(b -> b.mwLoss).sum();
+            var top = base.branches().stream().filter(b -> "Transformer".equalsIgnoreCase(b.getKind())).max((a, b) -> Double.compare(a.mwLoss, b.mwLoss));
+            return top.map(b -> String.format("Highest loss transformer: XFMR %d->%d dissipating %.2f MW (%.1f%% of total transformer losses).",
+                    b.fromBus, b.toBus, b.mwLoss, (b.mwLoss / Math.max(totalLoss, 0.001)) * 100.0))
+                    .orElse("No transformer loss data available.");
+        };
+        categories.add(xfmrLossIntensity);
+
+        Category lineReactiveLosses = new Category();
+        lineReactiveLosses.id = "line_reactive_losses";
+        lineReactiveLosses.shortName = "Line Q-Loss";
+        lineReactiveLosses.group = "Loss Analysis";
+        lineReactiveLosses.title = "Transmission Line Reactive Power Losses (MVAr)";
+        lineReactiveLosses.axisLabel = "Line (From -> To)";
+        lineReactiveLosses.unit = "MVAr loss";
+        lineReactiveLosses.dat0Table = "Section 1.5 % Transmission Lines (Columns: Line Reactance X in p.u., Susceptance B in p.u.)";
+        lineReactiveLosses.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Kind = Line, MVAR LOSS = Q_from + Q_to)";
+        lineReactiveLosses.formulaProof = "Q_loss = 3 × I² × X - V² × B  [Line Series Reactance Consumption minus Shunt Capacitive Charging].";
+        lineReactiveLosses.sourceColumns = "LINE FLOWS -> MVAr Loss";
+        lineReactiveLosses.scalingSource = "Base Case line reactive losses";
+        lineReactiveLosses.description = "Ranks transmission lines causing the highest reactive power absorption.";
+        lineReactiveLosses.healthyRange = "Low net inductive consumption on lines";
+        lineReactiveLosses.simpleExplanation = "Shows transmission lines consuming high magnetic reactive power, causing downstream voltage sag.";
+        lineReactiveLosses.action = "Install series capacitors to cancel line reactance or shunt capacitors at line endpoints.";
+        lineReactiveLosses.topN = 20;
+        lineReactiveLosses.rowsFn = this::lineReactiveLossRows;
+        lineReactiveLosses.insightFn = (base, cases) -> {
+            double totalQ = base.branches().stream().filter(b -> "Line".equalsIgnoreCase(b.getKind())).mapToDouble(b -> b.mvarLoss).sum();
+            return String.format("Total transmission line reactive losses: %.1f MVAr. High line reactive losses cause voltage decay along long transmission corridors.", totalQ);
+        };
+        categories.add(lineReactiveLosses);
+
+        Category xfmrReactiveLosses = new Category();
+        xfmrReactiveLosses.id = "xfmr_reactive_losses";
+        xfmrReactiveLosses.shortName = "XFMR Q-Loss";
+        xfmrReactiveLosses.group = "Loss Analysis";
+        xfmrReactiveLosses.title = "Transformer Reactive Power Losses (MVAr)";
+        xfmrReactiveLosses.axisLabel = "Transformer (From -> To)";
+        xfmrReactiveLosses.unit = "MVAr loss";
+        xfmrReactiveLosses.dat0Table = "Section 1.3 % Transformers (Columns: Leakage Reactance X in p.u.)";
+        xfmrReactiveLosses.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Kind = Transformer, MVAR LOSS = Q_from + Q_to)";
+        xfmrReactiveLosses.formulaProof = "Q_loss_xfmr = 3 × I² × X_leakage  [Transformer Leakage Inductance Consumption].";
+        xfmrReactiveLosses.sourceColumns = "TRANSFORMER FLOWS -> MVAr Loss";
+        xfmrReactiveLosses.scalingSource = "Base Case transformer leakage reactive losses";
+        xfmrReactiveLosses.description = "Ranks transformers consuming highest reactive power across their leakage reactance.";
+        xfmrReactiveLosses.healthyRange = "Leakage VAr loss proportional to MVA through-flow (X_leakage ~ 8-15%)";
+        xfmrReactiveLosses.simpleExplanation = "Shows transformers consuming reactive power due to internal magnetic leakage fields under heavy loading.";
+        xfmrReactiveLosses.action = "Add local shunt capacitors on transformer secondary/tertiary busbars to relieve upstream grid of transformer reactive burden.";
+        xfmrReactiveLosses.topN = 20;
+        xfmrReactiveLosses.rowsFn = this::xfmrReactiveLossRows;
+        xfmrReactiveLosses.insightFn = (base, cases) -> {
+            double totalQ = base.branches().stream().filter(b -> "Transformer".equalsIgnoreCase(b.getKind())).mapToDouble(b -> b.mvarLoss).sum();
+            return String.format("Total transformer reactive losses: %.1f MVAr. Supplying this locally prevents voltage drop across substation transformers.", totalQ);
+        };
+        categories.add(xfmrReactiveLosses);
+
+        // 4. Power Flow & Transfers (Split Lines vs Transformers)
+        Category lineFlow = new Category();
+        lineFlow.id = "line_flow";
+        lineFlow.shortName = "Line Flow";
+        lineFlow.group = "Power Flow & Transfers";
+        lineFlow.title = "Transmission Line Real Power Flow (MW)";
+        lineFlow.axisLabel = "Line (From -> To)";
+        lineFlow.unit = "MW";
+        lineFlow.dat0Table = "Section 1.5 % Transmission Lines (Columns: Line R, X, B, FromBus, ToBus)";
+        lineFlow.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Kind = Line, Columns: FROM, TO, MW FLOW)";
+        lineFlow.formulaProof = "P_ij = V_i² G_ij - V_i V_j (G_ij cos θ_ij + B_ij sin θ_ij)  [Line AC Transfer].";
+        lineFlow.sourceColumns = "LINE FLOWS -> MW Flow";
+        lineFlow.scalingSource = "Base Case solved line power flow magnitudes";
+        lineFlow.description = "Identifies bulk transmission lines carrying the highest real power transfers.";
+        lineFlow.healthyRange = "Balanced line flows (No single line carry >50% of corridor capacity)";
+        lineFlow.simpleExplanation = "Identifies the highest loaded transmission lines transferring bulk power across the grid.";
+        lineFlow.action = "Monitored for N-1 line outages and power wheeling transfer limits.";
+        lineFlow.topN = 20;
+        lineFlow.rowsFn = this::lineFlowRows;
+        categories.add(lineFlow);
+
+        Category xfmrFlow = new Category();
+        xfmrFlow.id = "xfmr_flow";
+        xfmrFlow.shortName = "XFMR Flow";
+        xfmrFlow.group = "Power Flow & Transfers";
+        xfmrFlow.title = "Transformer Real Power Flow (MW)";
+        xfmrFlow.axisLabel = "Transformer (From -> To)";
+        xfmrFlow.unit = "MW";
+        xfmrFlow.dat0Table = "Section 1.3 % Transformers (Columns: FromBus, ToBus, MVA Rating)";
+        xfmrFlow.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Kind = Transformer, Columns: FROM, TO, MW FLOW)";
+        xfmrFlow.formulaProof = "P_xfmr = V_from V_to / (a × X_k) × sin(θ_from - θ_to).";
+        xfmrFlow.sourceColumns = "TRANSFORMER FLOWS -> MW Flow";
+        xfmrFlow.scalingSource = "Base Case transformer MW through-flows";
+        xfmrFlow.description = "Identifies substation transformers carrying highest bulk power step-up/step-down transfers.";
+        xfmrFlow.healthyRange = "Through-power within continuous nameplate rating";
+        xfmrFlow.simpleExplanation = "Shows the active power being converted between voltage levels by substation transformers.";
+        xfmrFlow.action = "Key indicators for substation capacity expansion and transformer bank load sharing.";
+        xfmrFlow.topN = 20;
+        xfmrFlow.rowsFn = this::xfmrFlowRows;
+        categories.add(xfmrFlow);
 
         Category reactiveBalance = new Category();
         reactiveBalance.id = "reactive_balance";
@@ -2512,11 +2483,71 @@ public class AnalyticsDashboard {
                 .collect(Collectors.toList());
     }
 
-    private List<MetricRow> reactiveLossRows(Out0Results target, Out0Results scaleRef) {
+    private List<MetricRow> lineFlowRows(Out0Results target, Out0Results scaleRef) {
         return target.branches().stream()
+                .filter(b -> "Line".equalsIgnoreCase(b.getKind()))
+                .sorted((a, b) -> Double.compare(Math.abs(b.mwFlow), Math.abs(a.mwFlow)))
+                .map(b -> new MetricRow("LINE " + b.fromBus + "->" + b.toBus, Math.abs(b.mwFlow)))
+                .collect(Collectors.toList());
+    }
+
+    private List<MetricRow> xfmrFlowRows(Out0Results target, Out0Results scaleRef) {
+        return target.branches().stream()
+                .filter(b -> "Transformer".equalsIgnoreCase(b.getKind()))
+                .sorted((a, b) -> Double.compare(Math.abs(b.mwFlow), Math.abs(a.mwFlow)))
+                .map(b -> new MetricRow("XFMR " + b.fromBus + "->" + b.toBus, Math.abs(b.mwFlow)))
+                .collect(Collectors.toList());
+    }
+
+    private List<MetricRow> lineRealLossRows(Out0Results target, Out0Results scaleRef) {
+        return target.branches().stream()
+                .filter(b -> "Line".equalsIgnoreCase(b.getKind()))
+                .sorted((a, b) -> Double.compare(b.mwLoss, a.mwLoss))
+                .map(b -> new MetricRow("LINE " + b.fromBus + "->" + b.toBus, b.mwLoss))
+                .collect(Collectors.toList());
+    }
+
+    private List<MetricRow> xfmrRealLossRows(Out0Results target, Out0Results scaleRef) {
+        return target.branches().stream()
+                .filter(b -> "Transformer".equalsIgnoreCase(b.getKind()))
+                .sorted((a, b) -> Double.compare(b.mwLoss, a.mwLoss))
+                .map(b -> new MetricRow("XFMR " + b.fromBus + "->" + b.toBus, b.mwLoss))
+                .collect(Collectors.toList());
+    }
+
+    private List<MetricRow> lineLossIntensityRows(Out0Results target, Out0Results scaleRef) {
+        return target.branches().stream()
+                .filter(b -> "Line".equalsIgnoreCase(b.getKind()))
+                .sorted((a, b) -> Double.compare(b.mwLoss, a.mwLoss))
+                .limit(20)
+                .map(b -> new MetricRow("LINE " + b.fromBus + "->" + b.toBus, b.mwLoss))
+                .collect(Collectors.toList());
+    }
+
+    private List<MetricRow> xfmrLossIntensityRows(Out0Results target, Out0Results scaleRef) {
+        return target.branches().stream()
+                .filter(b -> "Transformer".equalsIgnoreCase(b.getKind()))
+                .sorted((a, b) -> Double.compare(b.mwLoss, a.mwLoss))
+                .limit(20)
+                .map(b -> new MetricRow("XFMR " + b.fromBus + "->" + b.toBus, b.mwLoss))
+                .collect(Collectors.toList());
+    }
+
+    private List<MetricRow> lineReactiveLossRows(Out0Results target, Out0Results scaleRef) {
+        return target.branches().stream()
+                .filter(b -> "Line".equalsIgnoreCase(b.getKind()))
                 .sorted((a, b) -> Double.compare(b.mvarLoss, a.mvarLoss))
-                .limit(15)
-                .map(b -> new MetricRow(b.getKind() + " " + b.fromBus + "->" + b.toBus, b.mvarLoss))
+                .limit(20)
+                .map(b -> new MetricRow("LINE " + b.fromBus + "->" + b.toBus, b.mvarLoss))
+                .collect(Collectors.toList());
+    }
+
+    private List<MetricRow> xfmrReactiveLossRows(Out0Results target, Out0Results scaleRef) {
+        return target.branches().stream()
+                .filter(b -> "Transformer".equalsIgnoreCase(b.getKind()))
+                .sorted((a, b) -> Double.compare(b.mvarLoss, a.mvarLoss))
+                .limit(20)
+                .map(b -> new MetricRow("XFMR " + b.fromBus + "->" + b.toBus, b.mvarLoss))
                 .collect(Collectors.toList());
     }
 
@@ -2552,14 +2583,6 @@ public class AnalyticsDashboard {
                 .sorted((a, b) -> Double.compare(b.loadingPercent, a.loadingPercent))
                 .limit(20)
                 .map(b -> new MetricRow(b.getKind() + " " + b.fromBus + "->" + b.toBus, b.loadingPercent))
-                .collect(Collectors.toList());
-    }
-
-    private List<MetricRow> lossIntensityRows(Out0Results target, Out0Results scaleRef) {
-        return target.branches().stream()
-                .sorted((a, b) -> Double.compare(b.mwLoss, a.mwLoss))
-                .limit(20)
-                .map(b -> new MetricRow(b.getKind() + " " + b.fromBus + "->" + b.toBus, b.mwLoss))
                 .collect(Collectors.toList());
     }
 }
