@@ -1,0 +1,199 @@
+/*
+ * PRDC Dynamic MiPower Input File Editor -- theme.css
+ * Mirrors the color values in com.prdc.mipower.utils.Constants exactly --
+ * if you change a color there, change it here too (kept as two places on
+ * purpose: Constants is for non-CSS-driven drawing like chart series
+ * colors, this file is for actual JavaFX styling).
+ */
+
+.root {
+    -fx-bg: #F4F7FC;
+    -fx-card: #FFFFFF;
+    -fx-toolbar: #1E3A8A;
+    -fx-sidebar: #2563EB;
+    -fx-accent: #3B82F6;
+    -fx-accent-hover: #2563EB;
+    -fx-success: #10B981;
+    -fx-warning: #F59E0B;
+    -fx-danger: #EF4444;
+    -fx-text: #1F2937;
+    -fx-text-muted: #6B7280;
+    -fx-border: #D1D5DB;
+
+    -fx-font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    -fx-background-color: -fx-bg;
+}
+
+/* ---- Cards / panels ---- */
+.card {
+    -fx-background-color: -fx-card;
+    -fx-background-radius: 12;
+    -fx-border-color: -fx-border;
+    -fx-border-radius: 12;
+    -fx-border-width: 1;
+}
+
+.card-title {
+    -fx-font-size: 15px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text;
+    -fx-min-height: 20px;
+    -fx-wrap-text: true;
+}
+
+.muted-label {
+    -fx-text-fill: -fx-text-muted;
+    -fx-font-size: 11.5px;
+}
+
+/* One-line plain-language explanation shown under every chart. */
+.chart-caption {
+    -fx-text-fill: #475569;
+    -fx-font-size: 11.5px;
+    -fx-font-style: italic;
+    -fx-padding: 4 8 8 8;
+    -fx-background-color: #F8FAFC;
+    -fx-background-radius: 6;
+}
+
+/* ---- Toolbar ---- */
+.toolbar-bar {
+    -fx-background-color: -fx-toolbar;
+}
+
+.toolbar-title {
+    -fx-text-fill: white;
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-min-width: -fx-pref-width;
+}
+
+/* ---- Sidebar ---- */
+.sidebar {
+    -fx-background-color: -fx-sidebar;
+}
+
+/* ---- Buttons ---- */
+.button-primary {
+    -fx-background-color: -fx-accent;
+    -fx-text-fill: white;
+    -fx-font-weight: bold;
+    -fx-background-radius: 8;
+    -fx-padding: 8 16 8 16;
+    -fx-cursor: hand;
+}
+
+.button-primary:hover {
+    -fx-background-color: -fx-accent-hover;
+}
+
+.button-primary:disabled {
+    -fx-opacity: 0.5;
+    -fx-cursor: default;
+}
+
+.button-danger {
+    -fx-background-color: transparent;
+    -fx-text-fill: #FCA5A5;
+    -fx-font-weight: bold;
+    -fx-border-color: -fx-danger;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 8 16 8 16;
+    -fx-cursor: hand;
+}
+
+.button-danger:hover {
+    -fx-background-color: -fx-danger;
+    -fx-text-fill: white;
+}
+
+.button-secondary {
+    -fx-background-color: transparent;
+    -fx-text-fill: -fx-text;
+    -fx-border-color: -fx-border;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+    -fx-padding: 8 16 8 16;
+    -fx-cursor: hand;
+}
+
+.button-secondary:hover {
+    -fx-background-color: derive(-fx-border, 50%);
+}
+
+/* ---- Status pills ---- */
+.status-success {
+    -fx-text-fill: -fx-success;
+    -fx-font-weight: bold;
+}
+
+.status-warning {
+    -fx-text-fill: -fx-warning;
+    -fx-font-weight: bold;
+}
+
+.status-danger {
+    -fx-text-fill: -fx-danger;
+    -fx-font-weight: bold;
+}
+
+/* ---- Tables ---- */
+.table-view {
+    -fx-background-color: -fx-card;
+    -fx-border-color: -fx-border;
+}
+
+.table-view .column-header-background {
+    -fx-background-color: #EEF2F9;
+}
+
+.table-view .column-header, .table-view .filler {
+    -fx-background-color: transparent;
+    -fx-border-color: transparent -fx-border transparent transparent;
+}
+
+.table-row-cell:odd {
+    -fx-background-color: #F8FAFC;
+}
+
+.table-row-cell:selected {
+    -fx-background-color: derive(-fx-accent, 80%);
+}
+
+/* ---- Status bar ---- */
+.status-bar {
+    -fx-background-color: -fx-card;
+    -fx-border-color: -fx-border transparent transparent transparent;
+    -fx-border-width: 1 0 0 0;
+}
+
+/* ---- Login page ---- */
+.login-card {
+    -fx-background-color: -fx-card;
+    -fx-background-radius: 16;
+    -fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 24, 0, 0, 8);
+}
+
+.login-title {
+    -fx-font-size: 20px;
+    -fx-font-weight: bold;
+    -fx-text-fill: -fx-text;
+}
+
+.login-subtitle {
+    -fx-font-size: 12px;
+    -fx-text-fill: -fx-text-muted;
+}
+
+.text-field-modern {
+    -fx-background-color: #F8FAFC;
+    -fx-background-radius: 8;
+    -fx-border-color: -fx-border;
+    -fx-border-radius: 8;
+    -fx-padding: 8 12 8 12;
+}
+
+.text-field-modern:focused {
+    -fx-border-color: -fx-accent;
+}
