@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
@@ -2337,7 +2339,7 @@ public class AnalyticsDashboard {
         vViolations.healthyRange = "0 Violations (100% of buses within 0.95 - 1.05 p.u.)";
         vViolations.simpleExplanation = "Pinpoints exact buses where voltage exceeds statutory boundaries. Undervoltage causes induction motor stalling and voltage collapse; overvoltage breaks down transformer dielectric insulation.";
         vViolations.action = "Priority list for capacitor/reactor switching, transformer tap adjustments, or generator setpoint tuning.";
-        vViolations.topN = 25;
+        vViolations.topN = 0;
         vViolations.rowsFn = this::voltageViolationRows;
         vViolations.insightFn = (base, cases) -> {
             long count = base.buses.stream().filter(Bus::hasVoltageViolation).count();
@@ -2362,7 +2364,7 @@ public class AnalyticsDashboard {
         angleSpread.healthyRange = "< 30.0° (Rotor stability limit: 45°-60°)";
         angleSpread.simpleExplanation = "Phase angle separation is the direct mechanical tension on the power grid. When angle spread between generators exceeds 40°-50°, generators lose synchronism and trip offline, leading to catastrophic blackout.";
         angleSpread.action = "Higher angle spread indicates heavier stress and lower transient stability margins.";
-        angleSpread.topN = 15;
+        angleSpread.topN = 0;
         angleSpread.rowsFn = this::angleSpreadRows;
         categories.add(angleSpread);
 
@@ -2382,7 +2384,7 @@ public class AnalyticsDashboard {
         voltageDev.healthyRange = "Within ±3.0% deviation from nominal (Grid code trip limit: ±5.0%)";
         voltageDev.simpleExplanation = "Visualizes voltage stress across all nodes in percentage terms. Deviations beyond ±5% violate grid codes and degrade consumer appliance performance.";
         voltageDev.action = "Sustained deviation >±5% degrades motor efficiency (motor torque ∝ V²), increases cable losses, and triggers equipment protection relays.";
-        voltageDev.topN = 20;
+        voltageDev.topN = 0;
         voltageDev.rowsFn = this::voltageDeviationRows;
         voltageDev.insightFn = (base, cases) -> {
             double avgDev = base.buses.stream().mapToDouble(b -> Math.abs(b.voltagePu - 1.0) * 100).average().orElse(0);
@@ -2865,24 +2867,27 @@ public class AnalyticsDashboard {
         List<Bus> allBuses = getAllActiveBuses();
         List<Bus> allViolations = allBuses.stream().filter(Bus::hasVoltageViolation).collect(Collectors.toList());
 
-        double minV = allViolations.stream().mapToDouble(b -> b.voltagePu).min().orElse(0.90);
-        double maxV = allViolations.stream().mapToDouble(b -> b.voltagePu).max().orElse(1.10);
+        if (allViolations.isEmpty()) {
+            return List.of(new MetricRow("No Violations", 0.0));
+        }
 
-        // Dynamically compute X-axis domain: [Math.min(min_violation, 0.90), Math.max(max_violation, 1.10)]
-        double domMin = Math.min(minV, 0.90);
-        double domMax = Math.max(maxV, 1.10);
-
+        // Collect distinct 0.02 bin lower bounds that contain violation buses across active cases
         double bin = 0.02;
-        double lo = Math.floor(domMin / bin) * bin;
-        double hi = Math.ceil(domMax / bin) * bin;
-        if (hi <= lo) hi = lo + bin;
-        int nBins = Math.max(1, (int) Math.round((hi - lo) / bin));
+        Set<Double> populatedBinLowers = new TreeSet<>();
+
+        for (Bus b : allViolations) {
+            double bLo = Math.floor(b.voltagePu / bin) * bin;
+            bLo = Math.round(bLo * 1000.0) / 1000.0;
+            populatedBinLowers.add(bLo);
+        }
 
         List<MetricRow> rows = new ArrayList<>();
-        for (int i = 0; i < nBins; i++) {
-            double bLo = lo + i * bin;
-            double bHi = bLo + bin;
-            boolean isLast = (i == nBins - 1);
+        List<Double> sortedLowers = new ArrayList<>(populatedBinLowers);
+        double highestLower = sortedLowers.get(sortedLowers.size() - 1);
+
+        for (double bLo : sortedLowers) {
+            double bHi = Math.round((bLo + bin) * 1000.0) / 1000.0;
+            boolean isLast = (bLo == highestLower);
             long count = target.buses.stream()
                     .filter(b -> b.hasVoltageViolation()
                             && b.voltagePu >= bLo - 1e-7
