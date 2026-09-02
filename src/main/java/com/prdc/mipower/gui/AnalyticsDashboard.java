@@ -43,6 +43,7 @@ import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListView;
 import javafx.scene.control.ScrollPane;
+import javafx.scene.control.Separator;
 import javafx.scene.control.Slider;
 import javafx.scene.control.SplitPane;
 import javafx.scene.control.Tab;
@@ -156,8 +157,7 @@ public class AnalyticsDashboard {
 
     private static final List<String> ALL_CHART_TYPES = List.of(
             CHART_BAR, CHART_STACKED_BAR, CHART_LINE, CHART_AREA,
-            CHART_SCATTER, CHART_BUBBLE, CHART_HISTOGRAM, CHART_BOX,
-            CHART_CORRELATION, CHART_RADAR, CHART_PIE, CHART_3D
+            CHART_SCATTER, CHART_RADAR, CHART_PIE, CHART_3D
     );
 
     public AnalyticsDashboard(List<CaseStudy> caseStudies, CaseStudyManager manager) {
@@ -752,14 +752,13 @@ public class AnalyticsDashboard {
         kpiHost = new FlowPane(12, 12);
         kpiHost.setPadding(new Insets(4, 0, 4, 0));
 
-        tableCaption = new Label();
-        tableCaption.setWrapText(true);
-        tableCaption.setStyle("-fx-font-size: 11.5px; -fx-text-fill: #64748B; -fx-font-weight: 600;");
+        Separator divider = new Separator();
+        divider.setStyle("-fx-padding: 8 0 8 0; -fx-opacity: 0.6;");
 
         table = new TableView<>();
         table.setPrefHeight(340);
 
-        content.getChildren().addAll(insightHeaderBox, tabBarBox, controlsRow, chartScroll, kpiHost, tableCaption, table);
+        content.getChildren().addAll(insightHeaderBox, tabBarBox, controlsRow, chartScroll, kpiHost, divider, table);
 
         ScrollPane scroll = new ScrollPane(content);
         scroll.setFitToWidth(true);
@@ -1186,8 +1185,6 @@ public class AnalyticsDashboard {
             chartHost.getChildren().setAll(buildChart(merged, selectedType, c));
         }
 
-        tableCaption.setText("📊 Solved Output Data Evidence Table [" + (c.out0Table != null ? c.out0Table : "Solved Load Flow")
-                + "] -- Authoritative Base Case (" + c.unit + ") with Δ for selected Case Studies.");
         buildMultiCaseTable(merged, c.unit);
     }
 
@@ -1345,26 +1342,7 @@ public class AnalyticsDashboard {
             }
         });
 
-        // Controls bar: drag tip + reset button
-        Label rotateTip = new Label("🖱️ Drag chart to orbit 360° · Double-click to reset view");
-        rotateTip.setStyle("-fx-font-size: 10.5px; -fx-text-fill: #94A3B8; -fx-font-style: italic;");
-
-        Button resetViewBtn = new Button("↺ Reset View");
-        resetViewBtn.setStyle("-fx-background-color: #334155; -fx-text-fill: #CBD5E1; -fx-font-size: 10.5px; "
-                + "-fx-background-radius: 4; -fx-padding: 2 8; -fx-cursor: hand;");
-        resetViewBtn.setOnAction(e -> {
-            rx.setAngle(0);
-            ry.setAngle(0);
-        });
-
-        HBox rotateBar = new HBox(10, rotateTip, resetViewBtn);
-        rotateBar.setAlignment(Pos.CENTER_LEFT);
-        rotateBar.setPadding(new Insets(4, 8, 2, 8));
-        rotateBar.setStyle("-fx-background-color: #1E293B; -fx-background-radius: 0 0 6 6;");
-
-        VBox container = new VBox(0, content, rotateBar);
-        VBox.setVgrow(content, Priority.ALWAYS);
-        return container;
+        return content;
     }
 
     private Node build3DVisualization(Category category) {
@@ -1947,10 +1925,11 @@ public class AnalyticsDashboard {
     private void buildCategories() {
         categories.clear();
 
+        // 1. Voltage Profile Assessment
         Category vProfile = new Category();
         vProfile.id = "voltage_profile";
         vProfile.shortName = "V-Profile";
-        vProfile.group = "Voltage & Stability";
+        vProfile.group = "Voltage Profile Assessment";
         vProfile.title = "Voltage Profile Distribution & Dispersion";
         vProfile.axisLabel = "Voltage Band (p.u.)";
         vProfile.unit = "buses";
@@ -1977,7 +1956,7 @@ public class AnalyticsDashboard {
         Category vViolations = new Category();
         vViolations.id = "voltage_violations";
         vViolations.shortName = "V-Violations";
-        vViolations.group = "Voltage & Stability";
+        vViolations.group = "Voltage Profile Assessment";
         vViolations.title = "Voltage Limit Violations & Outliers";
         vViolations.axisLabel = "Bus Identifier";
         vViolations.unit = "p.u.";
@@ -1999,51 +1978,179 @@ public class AnalyticsDashboard {
         };
         categories.add(vViolations);
 
-        Category branchLoading = new Category();
-        branchLoading.id = "branch_loading";
-        branchLoading.shortName = "Branch Load";
-        branchLoading.group = "Thermal & Loading";
-        branchLoading.title = "Branch Loading Ranking (Thermal Utilization)";
-        branchLoading.axisLabel = "Branch (From -> To)";
-        branchLoading.unit = "% loading";
-        branchLoading.dat0Table = "Section 1.5 % Transmission Lines & Section 1.3 % Transformers (Columns: FromBus, ToBus, MVA Nominal Rating)";
-        branchLoading.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Columns: FROM, TO, MW FLOW, MVAR FLOW, MVA FLOW, % LOADING)";
-        branchLoading.formulaProof = "S_flow = √(P² + Q²),  % Loading = (S_flow / S_rating_nominal) × 100%.";
-        branchLoading.sourceColumns = "LINE & TRANSFORMER FLOWS -> % Loading";
-        branchLoading.scalingSource = "Base Case MVA thermal ratings";
-        branchLoading.description = "Ranks lines and transformers by thermal capacity utilization.";
-        branchLoading.healthyRange = "< 80.0% loading (Continuous thermal rating: 100.0%)";
-        branchLoading.simpleExplanation = "Shows how heavily loaded each line and transformer is compared to its maximum continuous physical rating. Overheating lines sag closer to trees/ground causing flashovers, while overloaded transformers suffer rapid insulation degradation.";
-        branchLoading.action = "Identify bottlenecks requiring reconductoring, parallel line addition, or generation re-dispatch.";
-        branchLoading.topN = 15;
-        branchLoading.rowsFn = this::branchLoadingRows;
-        branchLoading.insightFn = (base, cases) -> {
-            var top = base.branches().stream().max((a, b) -> Double.compare(a.loadingPercent, b.loadingPercent));
-            return top.map(b -> String.format("Highest loaded branch is %s %d->%d at %.2f%% loading.",
-                    b.getKind(), b.fromBus, b.toBus, b.loadingPercent)).orElse("No branch data.");
+        Category angleSpread = new Category();
+        angleSpread.id = "angle_spread";
+        angleSpread.shortName = "Angle Spread";
+        angleSpread.group = "Voltage Profile Assessment";
+        angleSpread.title = "Voltage Angle Spread (Rotor Stability Indicator)";
+        angleSpread.axisLabel = "Bus";
+        angleSpread.unit = "deg";
+        angleSpread.dat0Table = "Section 1.2 % Bus Specifications (Slack Bus angle fixed at θ_ref = 0.0°)";
+        angleSpread.out0Table = "|***** BUS VOLTAGES AND POWERS *****| (Columns: NODE NO., FROM NAME, ANGLE DEGREE)";
+        angleSpread.formulaProof = "Δθ_max = max(θ_bus) - min(θ_bus).  Power transfer: P_ij ≈ (V_i V_j / X_ij) sin(θ_i - θ_j).";
+        angleSpread.sourceColumns = "BUS VOLTAGES AND POWERS -> ANGLE DEGREE";
+        angleSpread.scalingSource = "Base Case slack bus reference angle (0 deg)";
+        angleSpread.description = "Angular displacement across the network relative to the slack bus.";
+        angleSpread.healthyRange = "< 30.0° (Rotor stability limit: 45°-60°)";
+        angleSpread.simpleExplanation = "Phase angle separation is the direct mechanical tension on the power grid. When angle spread between generators exceeds 40°-50°, generators lose synchronism and trip offline, leading to catastrophic blackout.";
+        angleSpread.action = "Higher angle spread indicates heavier stress and lower transient stability margins.";
+        angleSpread.topN = 15;
+        angleSpread.rowsFn = this::angleSpreadRows;
+        categories.add(angleSpread);
+
+        Category voltageDev = new Category();
+        voltageDev.id = "voltage_deviation";
+        voltageDev.shortName = "V-Deviation";
+        voltageDev.group = "Voltage Profile Assessment";
+        voltageDev.title = "Voltage Deviation from Nominal (p.u.) — Stress Map";
+        voltageDev.axisLabel = "Bus";
+        voltageDev.unit = "% deviation";
+        voltageDev.dat0Table = "Section 1.2 % Bus Data (Nominal Base Voltage = 1.0 p.u.)";
+        voltageDev.out0Table = "|***** BUS VOLTAGES AND POWERS *****| (Columns: NODE NO., FROM NAME, V-MAG, % VR)";
+        voltageDev.formulaProof = "ΔV% = ((V_bus_pu - 1.0) / 1.0) × 100%.  Positive = Overvoltage (+ΔV), Negative = Undervoltage (-ΔV).";
+        voltageDev.sourceColumns = "BUS VOLTAGES AND POWERS -> V-MAG (p.u.), computed as (V - 1.0) × 100%";
+        voltageDev.scalingSource = "Base Case bus voltage, nominal = 1.0 p.u.";
+        voltageDev.description = "Percentage deviation of each bus voltage from the 1.0 p.u. nominal. Negative = undervoltage (reactive deficit), Positive = overvoltage (leading reactive surplus or lightly loaded network).";
+        voltageDev.healthyRange = "Within ±3.0% deviation from nominal (Grid code trip limit: ±5.0%)";
+        voltageDev.simpleExplanation = "Visualizes voltage stress across all nodes in percentage terms. Deviations beyond ±5% violate grid codes and degrade consumer appliance performance.";
+        voltageDev.action = "Sustained deviation >±5% degrades motor efficiency (motor torque ∝ V²), increases cable losses, and triggers equipment protection relays. Undervoltage buses need shunt capacitors or tap adjustment; overvoltage buses may need shunt reactors or tap reduction.";
+        voltageDev.topN = 20;
+        voltageDev.rowsFn = this::voltageDeviationRows;
+        voltageDev.insightFn = (base, cases) -> {
+            double avgDev = base.buses.stream().mapToDouble(b -> Math.abs(b.voltagePu - 1.0) * 100).average().orElse(0);
+            long severeCount = base.buses.stream().filter(b -> Math.abs(b.voltagePu - 1.0) * 100 > 5.0).count();
+            return String.format("Average voltage deviation: %.2f%%. %d bus(es) exceed ±5%% deviation threshold — these require immediate voltage control action (tap adjustment, VAr injection, or generator AVR setpoint change).", avgDev, severeCount);
         };
-        categories.add(branchLoading);
+        categories.add(voltageDev);
 
-        Category overloadSummary = new Category();
-        overloadSummary.id = "overload_summary";
-        overloadSummary.shortName = "Overloads";
-        overloadSummary.group = "Thermal & Loading";
-        overloadSummary.title = "Overload / High-Load / Normal Breakdown";
-        overloadSummary.axisLabel = "Loading Band";
-        overloadSummary.unit = "branches";
-        overloadSummary.dat0Table = "Section 1.5 % Transmission Lines & Section 1.3 % Transformers (Total Fleet Specifications)";
-        overloadSummary.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Classified by % Loading column and Overload '*' flags)";
-        overloadSummary.formulaProof = "Overloaded: %Loading ≥ 100%,  High Load: 80% ≤ %Loading < 100%,  Normal: %Loading < 80%.";
-        overloadSummary.sourceColumns = "Line/Transformer Flows -> Loading %, Overload flags";
-        overloadSummary.scalingSource = "Base Case Overload (>100%) and High-Load (>80%) thresholds";
-        overloadSummary.description = "Categorizes total branch fleet into Overloaded, High Load, and Normal loading bands.";
-        overloadSummary.healthyRange = "0 Overloaded (≥100%), 0 High Load (80-100%)";
-        overloadSummary.simpleExplanation = "Provides a macro-level health check of the grid's thermal capacity headroom. High numbers in the Overloaded and High-Load categories mean the grid is operating under stress with zero contingency margin.";
-        overloadSummary.action = "Rising overload counts indicate growing grid congestion under stress.";
-        overloadSummary.topN = 0;
-        overloadSummary.rowsFn = this::overloadSummaryRows;
-        categories.add(overloadSummary);
+        // 2. Thermal & Loading (Only Transformer Loading and Line Loading)
+        Category xfmrLoading = new Category();
+        xfmrLoading.id = "transformer_loading";
+        xfmrLoading.shortName = "XFMR Load";
+        xfmrLoading.group = "Thermal & Loading";
+        xfmrLoading.title = "Transformer Loading Ranking (Thermal Utilization)";
+        xfmrLoading.axisLabel = "Transformer (From->To)";
+        xfmrLoading.unit = "% loading";
+        xfmrLoading.dat0Table = "Section 1.3 % Total 2Wdg Transformers (Columns: FromBus, ToBus, MVA Nominal Rating, % Tap)";
+        xfmrLoading.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Equipment Kind = Transformer, % LOADING)";
+        xfmrLoading.formulaProof = "% Loading = (√(MW_flow² + MVAr_flow²) / MVA_rating_xfmr) × 100%.";
+        xfmrLoading.sourceColumns = "TRANSFORMER FLOWS -> % Loading";
+        xfmrLoading.scalingSource = "Base Case transformer MVA thermal ratings";
+        xfmrLoading.description = "Ranks all transformers by thermal capacity utilization in the Base Case.";
+        xfmrLoading.healthyRange = "< 80.0% continuous loading (100% maximum continuous thermal rating)";
+        xfmrLoading.simpleExplanation = "Substation power transformers are the most expensive assets on the power grid. Operating them over 100% causes rapid winding paper insulation degradation (Arrhenius Law: every 10°C rise doubles insulation aging rate).";
+        xfmrLoading.action = "Overloaded transformers experience accelerated insulation aging (Arrhenius law: every 10°C rise halves insulation life). They are priority candidates for on-load tap changer adjustment, parallel transformer addition, or generator re-dispatch to reduce transfer.";
+        xfmrLoading.topN = 20;
+        xfmrLoading.rowsFn = this::transformerLoadingRows;
+        xfmrLoading.insightFn = (base, cases) -> {
+            long ovl = base.branches().stream()
+                    .filter(b -> "Transformer".equalsIgnoreCase(b.getKind()) && b.isOverloaded()).count();
+            long total = base.branches().stream().filter(b -> "Transformer".equalsIgnoreCase(b.getKind())).count();
+            return String.format("%d of %d transformers are OVERLOADED in Base Case. Overloaded transformers cause irreversible insulation damage and are the leading cause of forced outages in aging power systems.", ovl, total);
+        };
+        categories.add(xfmrLoading);
 
+        Category lineLoading = new Category();
+        lineLoading.id = "line_loading";
+        lineLoading.shortName = "Line Load";
+        lineLoading.group = "Thermal & Loading";
+        lineLoading.title = "Transmission Line Loading Ranking (Thermal Utilization)";
+        lineLoading.axisLabel = "Line (From->To)";
+        lineLoading.unit = "% loading";
+        lineLoading.dat0Table = "Section 1.5 % Total Lines (Columns: FromBus, ToBus, R, X, B, MVA Rating)";
+        lineLoading.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Equipment Kind = Line, % LOADING)";
+        lineLoading.formulaProof = "% Loading = (√(MW_flow² + MVAr_flow²) / MVA_rating_line) × 100%.";
+        lineLoading.sourceColumns = "LINE FLOWS -> % Loading";
+        lineLoading.scalingSource = "Base Case line thermal ratings (normal/emergency)";
+        lineLoading.description = "Ranks all transmission lines (excluding transformers) by thermal capacity utilization.";
+        lineLoading.healthyRange = "< 80.0% continuous loading (Ground clearance & thermal sag limit: 100%)";
+        lineLoading.simpleExplanation = "Ranks overhead transmission lines by percentage thermal loading. Overheated aluminum conductors expand and sag into trees or roadways, risking short-circuit ground faults.";
+        lineLoading.action = "Highly loaded lines experience increased conductor sag (clearance violation risk at peak temperatures), high I²R Joule losses, and reduced N-1 security. Identify these for emergency rating checks, reconductoring, or generation redispatch to relieve congestion.";
+        lineLoading.topN = 20;
+        lineLoading.rowsFn = this::lineLoadingRows;
+        lineLoading.insightFn = (base, cases) -> {
+            double avgLoad = base.branches().stream()
+                    .filter(b -> "Line".equalsIgnoreCase(b.getKind()))
+                    .mapToDouble(b -> b.loadingPercent).average().orElse(0);
+            long ovl = base.branches().stream()
+                    .filter(b -> "Line".equalsIgnoreCase(b.getKind()) && b.isOverloaded()).count();
+            return String.format("Average transmission line loading: %.1f%%. %d line(s) OVERLOADED. High average loading reduces N-1 security — a single contingency can trigger cascading overloads.", avgLoad, ovl);
+        };
+        categories.add(lineLoading);
+
+        // 3. Loss Analysis (Real Power Losses, Active Power Losses, Reactive Power Losses)
+        Category branchLosses = new Category();
+        branchLosses.id = "branch_losses";
+        branchLosses.shortName = "Real Losses";
+        branchLosses.group = "Loss Analysis";
+        branchLosses.title = "Real Power Losses by Branch (Top Contributors)";
+        branchLosses.axisLabel = "Branch (From -> To)";
+        branchLosses.unit = "MW loss";
+        branchLosses.dat0Table = "Section 1.5 % Transmission Lines (Columns: Series Resistance R in p.u., Reactance X in p.u.)";
+        branchLosses.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Columns: MW LOSS = P_from + P_to)";
+        branchLosses.formulaProof = "P_loss = 3 × I² × R = ((P² + Q²) / V²) × R  [Joule Heating Dissipation].";
+        branchLosses.sourceColumns = "LINE & TRANSFORMER FLOWS -> MW Loss";
+        branchLosses.scalingSource = "Base Case I²R Joule heating losses";
+        branchLosses.description = "Ranks equipment causing greatest transmission energy losses.";
+        branchLosses.healthyRange = "< 3.0% to 5.0% of total system generation (Low Joule dissipation)";
+        branchLosses.simpleExplanation = "Pinpoints lines where energy is wasted as heat due to conductor resistance and high currents. Upgrading conductors or balancing reactive power on these lines recovers lost revenue and reduces generator fuel consumption.";
+        branchLosses.action = "Prime targets for conductor upgrades, phase balancing, or voltage boosting to reduce system losses.";
+        branchLosses.topN = 15;
+        branchLosses.rowsFn = (r, ref) -> branchRankRows(r, b -> b.mwLoss);
+        categories.add(branchLosses);
+
+        Category lossIntensity = new Category();
+        lossIntensity.id = "loss_intensity";
+        lossIntensity.shortName = "Active Losses";
+        lossIntensity.group = "Loss Analysis";
+        lossIntensity.title = "Active Power Loss Intensity per Branch (Top Joule-Heating Bottlenecks)";
+        lossIntensity.axisLabel = "Branch (From -> To)";
+        lossIntensity.unit = "MW loss";
+        lossIntensity.dat0Table = "Section 1.5 % Transmission Lines (Columns: Series Resistance R in p.u.)";
+        lossIntensity.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Columns: FROM, TO, MW LOSS = P_ij + P_ji)";
+        lossIntensity.formulaProof = "P_loss_ij = I_ij² × R_ij = ((P_ij² + Q_ij²) / V_i²) × R_ij.  Loss Share % = (P_loss_ij / P_loss_system_total) × 100%.";
+        lossIntensity.sourceColumns = "LINE & TRANSFORMER FLOWS -> MW Loss";
+        lossIntensity.scalingSource = "Base Case branch I²R losses";
+        lossIntensity.description = "Pinpoints individual equipment causing greatest transmission energy losses through Joule heating (I²R). High loss indicates heavy current density or excessive conductor resistance.";
+        lossIntensity.healthyRange = "Top 5 branches contribute < 25% of total transmission losses";
+        lossIntensity.simpleExplanation = "Identifies the exact transmission branches dissipating the greatest percentage of system losses. Highlights where conductor replacement or reactive power injection will yield the highest return on investment.";
+        lossIntensity.action = "Prioritize for reconductoring (HTLS conductors), voltage boosting, or reactive compensation (reducing reactive current component reduces I²R loss).";
+        lossIntensity.topN = 20;
+        lossIntensity.rowsFn = this::lossIntensityRows;
+        lossIntensity.insightFn = (base, cases) -> {
+            double totalLoss = base.branches().stream().mapToDouble(b -> b.mwLoss).sum();
+            var top = base.branches().stream().max((a, b) -> Double.compare(a.mwLoss, b.mwLoss));
+            return top.map(b -> String.format("Top loss branch: %s %d->%d dissipating %.2f MW (%.1f%% of total %.2f MW branch losses).",
+                    b.getKind(), b.fromBus, b.toBus, b.mwLoss, (b.mwLoss / Math.max(totalLoss, 0.001)) * 100.0, totalLoss))
+                    .orElse("No branch loss data available.");
+        };
+        categories.add(lossIntensity);
+
+        Category reactiveLosses = new Category();
+        reactiveLosses.id = "reactive_losses";
+        reactiveLosses.shortName = "Reactive Losses";
+        reactiveLosses.group = "Loss Analysis";
+        reactiveLosses.title = "Reactive Power Losses by Branch (Top Contributors)";
+        reactiveLosses.axisLabel = "Branch (From->To)";
+        reactiveLosses.unit = "MVAr loss";
+        reactiveLosses.dat0Table = "Section 1.5 % Total Lines (Columns: Line Reactance X in p.u., Charging Susceptance B in p.u.)";
+        reactiveLosses.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Columns: MVAR LOSS = Q_from + Q_to)";
+        reactiveLosses.formulaProof = "Q_loss = 3 × I² × X - V² × B  [Net Reactive Inductive Consumption minus Capacitive Charging].";
+        reactiveLosses.sourceColumns = "LINE & TRANSFORMER FLOWS -> MVAr Loss";
+        reactiveLosses.scalingSource = "Base Case reactive loss (2IX²/V² consumption per branch)";
+        reactiveLosses.description = "Ranks equipment causing the highest reactive power losses in the network.";
+        reactiveLosses.healthyRange = "Low inductive VAr consumption (Series capacitor cancellation)";
+        reactiveLosses.simpleExplanation = "Shows lines that consume high amounts of magnetic energy (reactive power). High reactive losses burden generators and drop receiving substation voltages.";
+        reactiveLosses.action = "High reactive losses indicate long-distance reactive power transport — fundamentally inefficient. Series capacitors cancel inductive reactance (reducing IX reactive loss). Distributed VAr sources (SVCs, STATCOMs, capacitor banks) near reactive load centers are the engineering solution.";
+        reactiveLosses.topN = 15;
+        reactiveLosses.rowsFn = this::reactiveLossRows;
+        reactiveLosses.insightFn = (base, cases) -> {
+            double totalQloss = base.branches().stream().mapToDouble(b -> b.mvarLoss).sum();
+            return String.format("Total reactive losses: %.1f MVAr. These losses must be supplied by generators or shunt capacitors, increasing reactive generation burden and reducing voltage margins across the network.", totalQloss);
+        };
+        categories.add(reactiveLosses);
+
+        // 4. Power Flow & Transfers
         Category branchFlow = new Category();
         branchFlow.id = "branch_flow";
         branchFlow.shortName = "MW Corridors";
@@ -2064,46 +2171,32 @@ public class AnalyticsDashboard {
         branchFlow.rowsFn = (r, ref) -> branchRankRows(r, b -> Math.abs(b.mwFlow));
         categories.add(branchFlow);
 
-        Category branchLosses = new Category();
-        branchLosses.id = "branch_losses";
-        branchLosses.shortName = "MW Losses";
-        branchLosses.group = "Losses & Efficiency";
-        branchLosses.title = "Real Power Losses by Branch (Top Contributors)";
-        branchLosses.axisLabel = "Branch (From -> To)";
-        branchLosses.unit = "MW loss";
-        branchLosses.dat0Table = "Section 1.5 % Transmission Lines (Columns: Series Resistance R in p.u., Reactance X in p.u.)";
-        branchLosses.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Columns: MW LOSS = P_from + P_to)";
-        branchLosses.formulaProof = "P_loss = 3 × I² × R = ((P² + Q²) / V²) × R  [Joule Heating Dissipation].";
-        branchLosses.sourceColumns = "LINE & TRANSFORMER FLOWS -> MW Loss";
-        branchLosses.scalingSource = "Base Case I²R Joule heating losses";
-        branchLosses.description = "Ranks equipment causing greatest transmission energy losses.";
-        branchLosses.healthyRange = "< 3.0% to 5.0% of total system generation (Low Joule dissipation)";
-        branchLosses.simpleExplanation = "Pinpoints lines where energy is wasted as heat due to conductor resistance and high currents. Upgrading conductors or balancing reactive power on these lines recovers lost revenue and reduces generator fuel consumption.";
-        branchLosses.action = "Prime targets for conductor upgrades, phase balancing, or voltage boosting to reduce system losses.";
-        branchLosses.topN = 15;
-        branchLosses.rowsFn = (r, ref) -> branchRankRows(r, b -> b.mwLoss);
-        categories.add(branchLosses);
+        Category reactiveBalance = new Category();
+        reactiveBalance.id = "reactive_balance";
+        reactiveBalance.shortName = "Q-Balance";
+        reactiveBalance.group = "Power Flow & Transfers";
+        reactiveBalance.title = "Reactive Power Balance by Bus (Net VAr Deficit/Surplus)";
+        reactiveBalance.axisLabel = "Bus";
+        reactiveBalance.unit = "MVAr";
+        reactiveBalance.dat0Table = "Section 1.13 % Total Load & Section 1.12 % Total Gen+WindGen (MVAr Demand & Capabilities)";
+        reactiveBalance.out0Table = "|***** BUS VOLTAGES AND POWERS *****| (Columns: MVAR LOAD, MVAR GEN, SHUNT MVAR)";
+        reactiveBalance.formulaProof = "Q_net_deficit = Q_load - Q_gen - Q_shunt_cap.  Positive = Deficit (Inductive Draw), Negative = Surplus.";
+        reactiveBalance.sourceColumns = "BUS VOLTAGES AND POWERS -> MVAr LOAD, MVAr GEN";
+        reactiveBalance.scalingSource = "Base Case bus reactive dispatch values";
+        reactiveBalance.description = "Net reactive imbalance (MVAr Load minus MVAr Generation) at each bus. Positive = reactive deficit (lagging), Negative = reactive surplus (leading).";
+        reactiveBalance.healthyRange = "Net VAr Deficit near 0 MVAr (Local reactive power compensation)";
+        reactiveBalance.simpleExplanation = "Reactive power cannot travel long distances across inductive lines without causing extreme voltage drops. This chart reveals substations that urgently require local capacitor banks or STATCOMs.";
+        reactiveBalance.action = "High net reactive draw at a bus signals need for local VAr compensation (shunt capacitors, SVCs). This prevents voltage decay and reduces reactive power transmission losses. Reactive power cannot be transported efficiently over long distances — it must be generated locally.";
+        reactiveBalance.topN = 20;
+        reactiveBalance.rowsFn = this::reactiveBalanceRows;
+        reactiveBalance.insightFn = (base, cases) -> {
+            double totalDeficit = base.buses.stream()
+                    .mapToDouble(b -> Math.max(0, b.mvarLoad - b.mvarGeneration)).sum();
+            return String.format("Total reactive deficit across Base Case network: %.1f MVAr. Buses with high deficit must import reactive power via transmission lines, causing high I²R reactive losses and voltage drops.", totalDeficit);
+        };
+        categories.add(reactiveBalance);
 
-        Category powerBalance = new Category();
-        powerBalance.id = "power_balance";
-        powerBalance.shortName = "Balance";
-        powerBalance.group = "System Overview";
-        powerBalance.title = "System Power Balance & Loss Share";
-        powerBalance.axisLabel = "Quantity";
-        powerBalance.unit = "MW / MVAr";
-        powerBalance.dat0Table = "System Specifications & Section 1.2 Bus Demand Totals";
-        powerBalance.out0Table = "|***** SYSTEM SUMMARY *****| (Columns: TOTAL GENERATION, TOTAL LOAD, TOTAL LOSSES in MW & MVAr)";
-        powerBalance.formulaProof = "Conservation of Energy: Σ P_Gen = Σ P_Load + Σ P_Loss;  Σ Q_Gen = Σ Q_Load + Σ Q_Loss - Σ Q_Cap_Charging.";
-        powerBalance.sourceColumns = "Summary Block -> Real/Reactive Generation, Load, Losses";
-        powerBalance.scalingSource = "Base Case overall network totals";
-        powerBalance.description = "System-wide generation, demand, and transmission loss breakdown.";
-        powerBalance.healthyRange = "Loss Share < 4.0% of total generation, Power Balance ΔP ≈ 0";
-        powerBalance.simpleExplanation = "Compares total electrical energy generated vs consumed vs lost across the entire network. The ratio of Losses to Total Generation measures the overall economic and electrical efficiency of the power system.";
-        powerBalance.action = "Evaluates overall efficiency: loss percentage of total generation is the primary system health indicator.";
-        powerBalance.topN = 0;
-        powerBalance.rowsFn = this::powerBalanceRows;
-        categories.add(powerBalance);
-
+        // 5. Generation & Load
         Category genDist = new Category();
         genDist.id = "generation_dist";
         genDist.shortName = "Generation";
@@ -2164,152 +2257,6 @@ public class AnalyticsDashboard {
         powerFactor.rowsFn = this::powerFactorRows;
         categories.add(powerFactor);
 
-        Category angleSpread = new Category();
-        angleSpread.id = "angle_spread";
-        angleSpread.shortName = "Angle Spread";
-        angleSpread.group = "Voltage & Stability";
-        angleSpread.title = "Voltage Angle Spread (Rotor Stability Indicator)";
-        angleSpread.axisLabel = "Bus";
-        angleSpread.unit = "deg";
-        angleSpread.dat0Table = "Section 1.2 % Bus Specifications (Slack Bus angle fixed at θ_ref = 0.0°)";
-        angleSpread.out0Table = "|***** BUS VOLTAGES AND POWERS *****| (Columns: NODE NO., FROM NAME, ANGLE DEGREE)";
-        angleSpread.formulaProof = "Δθ_max = max(θ_bus) - min(θ_bus).  Power transfer: P_ij ≈ (V_i V_j / X_ij) sin(θ_i - θ_j).";
-        angleSpread.sourceColumns = "BUS VOLTAGES AND POWERS -> ANGLE DEGREE";
-        angleSpread.scalingSource = "Base Case slack bus reference angle (0 deg)";
-        angleSpread.description = "Angular displacement across the network relative to the slack bus.";
-        angleSpread.healthyRange = "< 30.0° (Rotor stability limit: 45°-60°)";
-        angleSpread.simpleExplanation = "Phase angle separation is the direct mechanical tension on the power grid. When angle spread between generators exceeds 40°-50°, generators lose synchronism and trip offline, leading to catastrophic blackout.";
-        angleSpread.action = "Higher angle spread indicates heavier stress and lower transient stability margins.";
-        angleSpread.topN = 15;
-        angleSpread.rowsFn = this::angleSpreadRows;
-        categories.add(angleSpread);
-
-        Category convergence = new Category();
-        convergence.id = "convergence";
-        convergence.shortName = "Convergence";
-        convergence.group = "System Overview";
-        convergence.title = "Solved Case Quality, Convergence & Voltage Bounds";
-        convergence.axisLabel = "Metric";
-        convergence.unit = "";
-        convergence.dat0Table = "Common Control Options (LFA Option, Tolerance, Max Iterations)";
-        convergence.out0Table = "Load Flow Header Block & Solved System Summary (P/Q Iterations, Min/Max/Avg Voltages)";
-        convergence.formulaProof = "Convergence Criterion: max(|ΔP_i|, |ΔQ_i|) < ε (typically 0.0001 p.u. within max 20 iterations).";
-        convergence.sourceColumns = "Solver P/Q Iterations, Min/Max/Avg Voltages, Violation Counters";
-        convergence.scalingSource = "Base Case numerical convergence tolerances";
-        convergence.description = "Sanity verification for numerical convergence and power flow solvability.";
-        convergence.healthyRange = "P Iterations ≤ 6, Q Iterations ≤ 8, Mismatch < 0.0001 p.u., 0 Violations";
-        convergence.simpleExplanation = "Verifies mathematical solver convergence and numerical integrity of the power flow algorithm. Ensures results are physical and trustworthy before operators commit dispatch schedules.";
-        convergence.action = "Ensure robust convergence before approving operational dispatch.";
-        convergence.kpiOnly = true;
-        convergence.topN = 0;
-        convergence.rowsFn = this::convergenceRows;
-        categories.add(convergence);
-
-        // ---- Extended Categories ----
-
-        Category reactiveBalance = new Category();
-        reactiveBalance.id = "reactive_balance";
-        reactiveBalance.shortName = "Q-Balance";
-        reactiveBalance.group = "Power Flow & Transfers";
-        reactiveBalance.title = "Reactive Power Balance by Bus (Net VAr Deficit/Surplus)";
-        reactiveBalance.axisLabel = "Bus";
-        reactiveBalance.unit = "MVAr";
-        reactiveBalance.dat0Table = "Section 1.13 % Total Load & Section 1.12 % Total Gen+WindGen (MVAr Demand & Capabilities)";
-        reactiveBalance.out0Table = "|***** BUS VOLTAGES AND POWERS *****| (Columns: MVAR LOAD, MVAR GEN, SHUNT MVAR)";
-        reactiveBalance.formulaProof = "Q_net_deficit = Q_load - Q_gen - Q_shunt_cap.  Positive = Deficit (Inductive Draw), Negative = Surplus.";
-        reactiveBalance.sourceColumns = "BUS VOLTAGES AND POWERS -> MVAr LOAD, MVAr GEN";
-        reactiveBalance.scalingSource = "Base Case bus reactive dispatch values";
-        reactiveBalance.description = "Net reactive imbalance (MVAr Load minus MVAr Generation) at each bus. Positive = reactive deficit (lagging), Negative = reactive surplus (leading).";
-        reactiveBalance.healthyRange = "Net VAr Deficit near 0 MVAr (Local reactive power compensation)";
-        reactiveBalance.simpleExplanation = "Reactive power cannot travel long distances across inductive lines without causing extreme voltage drops. This chart reveals substations that urgently require local capacitor banks or STATCOMs.";
-        reactiveBalance.action = "High net reactive draw at a bus signals need for local VAr compensation (shunt capacitors, SVCs). This prevents voltage decay and reduces reactive power transmission losses. Reactive power cannot be transported efficiently over long distances — it must be generated locally.";
-        reactiveBalance.topN = 20;
-        reactiveBalance.rowsFn = this::reactiveBalanceRows;
-        reactiveBalance.insightFn = (base, cases) -> {
-            double totalDeficit = base.buses.stream()
-                    .mapToDouble(b -> Math.max(0, b.mvarLoad - b.mvarGeneration)).sum();
-            return String.format("Total reactive deficit across Base Case network: %.1f MVAr. Buses with high deficit must import reactive power via transmission lines, causing high I²R reactive losses and voltage drops.", totalDeficit);
-        };
-        categories.add(reactiveBalance);
-
-        Category xfmrLoading = new Category();
-        xfmrLoading.id = "transformer_loading";
-        xfmrLoading.shortName = "XFMR Load";
-        xfmrLoading.group = "Thermal & Loading";
-        xfmrLoading.title = "Transformer Loading Ranking (Thermal Utilization)";
-        xfmrLoading.axisLabel = "Transformer (From->To)";
-        xfmrLoading.unit = "% loading";
-        xfmrLoading.dat0Table = "Section 1.3 % Total 2Wdg Transformers (Columns: FromBus, ToBus, MVA Nominal Rating, % Tap)";
-        xfmrLoading.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Equipment Kind = Transformer, % LOADING)";
-        xfmrLoading.formulaProof = "% Loading = (√(MW_flow² + MVAr_flow²) / MVA_rating_xfmr) × 100%.";
-        xfmrLoading.sourceColumns = "TRANSFORMER FLOWS -> % Loading";
-        xfmrLoading.scalingSource = "Base Case transformer MVA thermal ratings";
-        xfmrLoading.description = "Ranks all transformers by thermal capacity utilization in the Base Case.";
-        xfmrLoading.healthyRange = "< 80.0% continuous loading (100% maximum continuous thermal rating)";
-        xfmrLoading.simpleExplanation = "Substation power transformers are the most expensive assets on the power grid. Operating them over 100% causes rapid winding paper insulation degradation (Arrhenius Law: every 10°C rise doubles insulation aging rate).";
-        xfmrLoading.action = "Overloaded transformers experience accelerated insulation aging (Arrhenius law: every 10°C rise halves insulation life). They are priority candidates for on-load tap changer adjustment, parallel transformer addition, or generator re-dispatch to reduce transfer.";
-        xfmrLoading.topN = 20;
-        xfmrLoading.rowsFn = this::transformerLoadingRows;
-        xfmrLoading.insightFn = (base, cases) -> {
-            long ovl = base.branches().stream()
-                    .filter(b -> "Transformer".equalsIgnoreCase(b.getKind()) && b.isOverloaded()).count();
-            long total = base.branches().stream().filter(b -> "Transformer".equalsIgnoreCase(b.getKind())).count();
-            return String.format("%d of %d transformers are OVERLOADED in Base Case. Overloaded transformers cause irreversible insulation damage and are the leading cause of forced outages in aging power systems.", ovl, total);
-        };
-        categories.add(xfmrLoading);
-
-        Category lineLoading = new Category();
-        lineLoading.id = "line_loading";
-        lineLoading.shortName = "Line Load";
-        lineLoading.group = "Thermal & Loading";
-        lineLoading.title = "Transmission Line Loading Ranking (Thermal Utilization)";
-        lineLoading.axisLabel = "Line (From->To)";
-        lineLoading.unit = "% loading";
-        lineLoading.dat0Table = "Section 1.5 % Total Lines (Columns: FromBus, ToBus, R, X, B, MVA Rating)";
-        lineLoading.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Equipment Kind = Line, % LOADING)";
-        lineLoading.formulaProof = "% Loading = (√(MW_flow² + MVAr_flow²) / MVA_rating_line) × 100%.";
-        lineLoading.sourceColumns = "LINE FLOWS -> % Loading";
-        lineLoading.scalingSource = "Base Case line thermal ratings (normal/emergency)";
-        lineLoading.description = "Ranks all transmission lines (excluding transformers) by thermal capacity utilization.";
-        lineLoading.healthyRange = "< 80.0% continuous loading (Ground clearance & thermal sag limit: 100%)";
-        lineLoading.simpleExplanation = "Ranks overhead transmission lines by percentage thermal loading. Overheated aluminum conductors expand and sag into trees or roadways, risking short-circuit ground faults.";
-        lineLoading.action = "Highly loaded lines experience increased conductor sag (clearance violation risk at peak temperatures), high I²R Joule losses, and reduced N-1 security. Identify these for emergency rating checks, reconductoring, or generation redispatch to relieve congestion.";
-        lineLoading.topN = 20;
-        lineLoading.rowsFn = this::lineLoadingRows;
-        lineLoading.insightFn = (base, cases) -> {
-            double avgLoad = base.branches().stream()
-                    .filter(b -> "Line".equalsIgnoreCase(b.getKind()))
-                    .mapToDouble(b -> b.loadingPercent).average().orElse(0);
-            long ovl = base.branches().stream()
-                    .filter(b -> "Line".equalsIgnoreCase(b.getKind()) && b.isOverloaded()).count();
-            return String.format("Average transmission line loading: %.1f%%. %d line(s) OVERLOADED. High average loading reduces N-1 security — a single contingency can trigger cascading overloads.", avgLoad, ovl);
-        };
-        categories.add(lineLoading);
-
-        Category reactiveLosses = new Category();
-        reactiveLosses.id = "reactive_losses";
-        reactiveLosses.shortName = "Q-Losses";
-        reactiveLosses.group = "Losses & Efficiency";
-        reactiveLosses.title = "Reactive Power Losses by Branch (Top Contributors)";
-        reactiveLosses.axisLabel = "Branch (From->To)";
-        reactiveLosses.unit = "MVAr loss";
-        reactiveLosses.dat0Table = "Section 1.5 % Total Lines (Columns: Line Reactance X in p.u., Charging Susceptance B in p.u.)";
-        reactiveLosses.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Columns: MVAR LOSS = Q_from + Q_to)";
-        reactiveLosses.formulaProof = "Q_loss = 3 × I² × X - V² × B  [Net Reactive Inductive Consumption minus Capacitive Charging].";
-        reactiveLosses.sourceColumns = "LINE & TRANSFORMER FLOWS -> MVAr Loss";
-        reactiveLosses.scalingSource = "Base Case reactive loss (2IX²/V² consumption per branch)";
-        reactiveLosses.description = "Ranks equipment causing the highest reactive power losses in the network.";
-        reactiveLosses.healthyRange = "Low inductive VAr consumption (Series capacitor cancellation)";
-        reactiveLosses.simpleExplanation = "Shows lines that consume high amounts of magnetic energy (reactive power). High reactive losses burden generators and drop receiving substation voltages.";
-        reactiveLosses.action = "High reactive losses indicate long-distance reactive power transport — fundamentally inefficient. Series capacitors cancel inductive reactance (reducing IX reactive loss). Distributed VAr sources (SVCs, STATCOMs, capacitor banks) near reactive load centers are the engineering solution.";
-        reactiveLosses.topN = 15;
-        reactiveLosses.rowsFn = this::reactiveLossRows;
-        reactiveLosses.insightFn = (base, cases) -> {
-            double totalQloss = base.branches().stream().mapToDouble(b -> b.mvarLoss).sum();
-            return String.format("Total reactive losses: %.1f MVAr. These losses must be supplied by generators or shunt capacitors, increasing reactive generation burden and reducing voltage margins across the network.", totalQloss);
-        };
-        categories.add(reactiveLosses);
-
         Category busMva = new Category();
         busMva.id = "bus_mva_intensity";
         busMva.shortName = "Bus MVA";
@@ -2337,31 +2284,49 @@ public class AnalyticsDashboard {
         };
         categories.add(busMva);
 
-        Category voltageDev = new Category();
-        voltageDev.id = "voltage_deviation";
-        voltageDev.shortName = "V-Deviation";
-        voltageDev.group = "Voltage & Stability";
-        voltageDev.title = "Voltage Deviation from Nominal (p.u.) — Stress Map";
-        voltageDev.axisLabel = "Bus";
-        voltageDev.unit = "% deviation";
-        voltageDev.dat0Table = "Section 1.2 % Bus Data (Nominal Base Voltage = 1.0 p.u.)";
-        voltageDev.out0Table = "|***** BUS VOLTAGES AND POWERS *****| (Columns: NODE NO., FROM NAME, V-MAG, % VR)";
-        voltageDev.formulaProof = "ΔV% = ((V_bus_pu - 1.0) / 1.0) × 100%.  Positive = Overvoltage (+ΔV), Negative = Undervoltage (-ΔV).";
-        voltageDev.sourceColumns = "BUS VOLTAGES AND POWERS -> V-MAG (p.u.), computed as (V - 1.0) × 100%";
-        voltageDev.scalingSource = "Base Case bus voltage, nominal = 1.0 p.u.";
-        voltageDev.description = "Percentage deviation of each bus voltage from the 1.0 p.u. nominal. Negative = undervoltage (reactive deficit), Positive = overvoltage (leading reactive surplus or lightly loaded network).";
-        voltageDev.healthyRange = "Within ±3.0% deviation from nominal (Grid code trip limit: ±5.0%)";
-        voltageDev.simpleExplanation = "Visualizes voltage stress across all nodes in percentage terms. Deviations beyond ±5% violate grid codes and degrade consumer appliance performance.";
-        voltageDev.action = "Sustained deviation >±5% degrades motor efficiency (motor torque ∝ V²), increases cable losses, and triggers equipment protection relays. Undervoltage buses need shunt capacitors or tap adjustment; overvoltage buses may need shunt reactors or tap reduction.";
-        voltageDev.topN = 20;
-        voltageDev.rowsFn = this::voltageDeviationRows;
-        voltageDev.insightFn = (base, cases) -> {
-            double avgDev = base.buses.stream().mapToDouble(b -> Math.abs(b.voltagePu - 1.0) * 100).average().orElse(0);
-            long severeCount = base.buses.stream().filter(b -> Math.abs(b.voltagePu - 1.0) * 100 > 5.0).count();
-            return String.format("Average voltage deviation: %.2f%%. %d bus(es) exceed ±5%% deviation threshold — these require immediate voltage control action (tap adjustment, VAr injection, or generator AVR setpoint change).", avgDev, severeCount);
-        };
-        categories.add(voltageDev);
+        // 6. System Overview
+        Category powerBalance = new Category();
+        powerBalance.id = "power_balance";
+        powerBalance.shortName = "Balance";
+        powerBalance.group = "System Overview";
+        powerBalance.title = "System Power Balance & Loss Share";
+        powerBalance.axisLabel = "Quantity";
+        powerBalance.unit = "MW / MVAr";
+        powerBalance.dat0Table = "System Specifications & Section 1.2 Bus Demand Totals";
+        powerBalance.out0Table = "|***** SYSTEM SUMMARY *****| (Columns: TOTAL GENERATION, TOTAL LOAD, TOTAL LOSSES in MW & MVAr)";
+        powerBalance.formulaProof = "Conservation of Energy: Σ P_Gen = Σ P_Load + Σ P_Loss;  Σ Q_Gen = Σ Q_Load + Σ Q_Loss - Σ Q_Cap_Charging.";
+        powerBalance.sourceColumns = "Summary Block -> Real/Reactive Generation, Load, Losses";
+        powerBalance.scalingSource = "Base Case overall network totals";
+        powerBalance.description = "System-wide generation, demand, and transmission loss breakdown.";
+        powerBalance.healthyRange = "Loss Share < 4.0% of total generation, Power Balance ΔP ≈ 0";
+        powerBalance.simpleExplanation = "Compares total electrical energy generated vs consumed vs lost across the entire network. The ratio of Losses to Total Generation measures the overall economic and electrical efficiency of the power system.";
+        powerBalance.action = "Evaluates overall efficiency: loss percentage of total generation is the primary system health indicator.";
+        powerBalance.topN = 0;
+        powerBalance.rowsFn = this::powerBalanceRows;
+        categories.add(powerBalance);
 
+        Category convergence = new Category();
+        convergence.id = "convergence";
+        convergence.shortName = "Convergence";
+        convergence.group = "System Overview";
+        convergence.title = "Solved Case Quality, Convergence & Voltage Bounds";
+        convergence.axisLabel = "Metric";
+        convergence.unit = "";
+        convergence.dat0Table = "Common Control Options (LFA Option, Tolerance, Max Iterations)";
+        convergence.out0Table = "Load Flow Header Block & Solved System Summary (P/Q Iterations, Min/Max/Avg Voltages)";
+        convergence.formulaProof = "Convergence Criterion: max(|ΔP_i|, |ΔQ_i|) < ε (typically 0.0001 p.u. within max 20 iterations).";
+        convergence.sourceColumns = "Solver P/Q Iterations, Min/Max/Avg Voltages, Violation Counters";
+        convergence.scalingSource = "Base Case numerical convergence tolerances";
+        convergence.description = "Sanity verification for numerical convergence and power flow solvability.";
+        convergence.healthyRange = "P Iterations ≤ 6, Q Iterations ≤ 8, Mismatch < 0.0001 p.u., 0 Violations";
+        convergence.simpleExplanation = "Verifies mathematical solver convergence and numerical integrity of the power flow algorithm. Ensures results are physical and trustworthy before operators commit dispatch schedules.";
+        convergence.action = "Ensure robust convergence before approving operational dispatch.";
+        convergence.kpiOnly = true;
+        convergence.topN = 0;
+        convergence.rowsFn = this::convergenceRows;
+        categories.add(convergence);
+
+        // 7. Asset Utilization & Analytics
         Category underutilized = new Category();
         underutilized.id = "underutilized_lines";
         underutilized.shortName = "Underutilized";
@@ -2385,57 +2350,6 @@ public class AnalyticsDashboard {
             return String.format("Detected %d underutilized transmission line(s) (<30%% loading). These lines contribute to high Ferranti capacitive charging and under-utilized capital investment.", underCount);
         };
         categories.add(underutilized);
-
-        Category n1Vuln = new Category();
-        n1Vuln.id = "n1_vulnerability";
-        n1Vuln.shortName = "N-1 Vulnerability";
-        n1Vuln.group = "System Security & Reliability";
-        n1Vuln.title = "N-1 Critical Contingency Vulnerability Index (70-100% Loaded Corridors)";
-        n1Vuln.axisLabel = "Critical Corridor";
-        n1Vuln.unit = "% loading";
-        n1Vuln.dat0Table = "Section 1.5 % Transmission Lines & Section 1.3 % Transformers (Corridor Topology & Ratings)";
-        n1Vuln.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: 70.0% ≤ % LOADING < 100.0%)";
-        n1Vuln.formulaProof = "Vulnerability Criterion: 70% ≤ % Loading < 100%.  Contingency Shift: Post-contingency flow P_k ≈ P_k_pre + LODF × P_tripped.";
-        n1Vuln.sourceColumns = "LINE & TRANSFORMER FLOWS -> Loading % in [70%, 100%]";
-        n1Vuln.scalingSource = "Base Case branch loading (near-congested paths)";
-        n1Vuln.description = "Identifies branches operating at 70% to 100% capacity where a sudden single contingency (N-1 trip) would instantly shift power onto parallel paths and trigger cascading blackout overloads.";
-        n1Vuln.healthyRange = "0 Corridors in 70-100% danger zone (Guarantees N-1 security)";
-        n1Vuln.simpleExplanation = "Detects lines already loaded above 70%. If any parallel line trips unexpectedly (N-1 contingency), the redirected power will immediately overload these lines beyond 100%, causing a cascading system outage.";
-        n1Vuln.action = "Arm Special Protection Schemes (SPS), re-dispatch merit order generation to unload critical corridors, or install series reactors/FACTS to control corridor impedance.";
-        n1Vuln.topN = 20;
-        n1Vuln.rowsFn = this::n1VulnerabilityRows;
-        n1Vuln.insightFn = (base, cases) -> {
-            long vuln = base.branches().stream().filter(b -> b.loadingPercent >= 70.0 && b.loadingPercent < 100.0).count();
-            return String.format("Found %d corridor(s) in the critical N-1 vulnerability zone (70-100%% loading). High risk of cascade trip upon single line outage.", vuln);
-        };
-        categories.add(n1Vuln);
-
-        Category lossIntensity = new Category();
-        lossIntensity.id = "loss_intensity";
-        lossIntensity.shortName = "Loss Intensity";
-        lossIntensity.group = "Losses & Efficiency";
-        lossIntensity.title = "Active Power Loss Intensity per Branch (Top Joule-Heating Bottlenecks)";
-        lossIntensity.axisLabel = "Branch (From -> To)";
-        lossIntensity.unit = "MW loss";
-        lossIntensity.dat0Table = "Section 1.5 % Transmission Lines (Columns: Series Resistance R in p.u.)";
-        lossIntensity.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Columns: FROM, TO, MW LOSS = P_ij + P_ji)";
-        lossIntensity.formulaProof = "P_loss_ij = I_ij² × R_ij = ((P_ij² + Q_ij²) / V_i²) × R_ij.  Loss Share % = (P_loss_ij / P_loss_system_total) × 100%.";
-        lossIntensity.sourceColumns = "LINE & TRANSFORMER FLOWS -> MW Loss";
-        lossIntensity.scalingSource = "Base Case branch I²R losses";
-        lossIntensity.description = "Pinpoints individual equipment causing greatest transmission energy losses through Joule heating (I²R). High loss indicates heavy current density or excessive conductor resistance.";
-        lossIntensity.healthyRange = "Top 5 branches contribute < 25% of total transmission losses";
-        lossIntensity.simpleExplanation = "Identifies the exact transmission branches dissipating the greatest percentage of system losses. Highlights where conductor replacement or reactive power injection will yield the highest return on investment.";
-        lossIntensity.action = "Prioritize for reconductoring (HTLS conductors), voltage boosting, or reactive compensation (reducing reactive current component reduces I²R loss).";
-        lossIntensity.topN = 20;
-        lossIntensity.rowsFn = this::lossIntensityRows;
-        lossIntensity.insightFn = (base, cases) -> {
-            double totalLoss = base.branches().stream().mapToDouble(b -> b.mwLoss).sum();
-            var top = base.branches().stream().max((a, b) -> Double.compare(a.mwLoss, b.mwLoss));
-            return top.map(b -> String.format("Top loss branch: %s %d->%d dissipating %.2f MW (%.1f%% of total %.2f MW branch losses).",
-                    b.getKind(), b.fromBus, b.toBus, b.mwLoss, (b.mwLoss / Math.max(totalLoss, 0.001)) * 100.0, totalLoss))
-                    .orElse("No branch loss data available.");
-        };
-        categories.add(lossIntensity);
     }
 
 
