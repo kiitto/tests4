@@ -112,6 +112,8 @@ public class AnalyticsDashboard {
     private StackPane chartHost;
     private FlowPane kpiHost;
     private TableView<MetricRow> table;
+    private TabPane dataTableTabPane;
+    private Tab mainTableTab;
     private Label tableCaption;
     private Slider zoomSlider;
     private boolean showValueLabels = true;
@@ -760,7 +762,15 @@ public class AnalyticsDashboard {
         table = new TableView<>();
         table.setPrefHeight(340);
 
-        content.getChildren().addAll(insightHeaderBox, tabBarBox, controlsRow, chartScroll, kpiHost, divider, table);
+        dataTableTabPane = new TabPane();
+        dataTableTabPane.setPrefHeight(370);
+        dataTableTabPane.setStyle("-fx-background-color: transparent; -fx-tab-min-height: 28px;");
+
+        mainTableTab = new Tab("Reference Table", table);
+        mainTableTab.setClosable(false);
+        dataTableTabPane.getTabs().add(mainTableTab);
+
+        content.getChildren().addAll(insightHeaderBox, tabBarBox, controlsRow, chartScroll, kpiHost, divider, dataTableTabPane);
 
         ScrollPane scroll = new ScrollPane(content);
         scroll.setFitToWidth(true);
@@ -1121,7 +1131,13 @@ public class AnalyticsDashboard {
     // Rendering Current Category with Multi-Case Overlays
     // ------------------------------------------------------------------- //
     private void renderCategory(Category c) {
+        currentCategory = c;
         insightHeaderBox.getChildren().clear();
+
+        if (dataTableTabPane != null && mainTableTab != null) {
+            dataTableTabPane.getTabs().retainAll(Collections.singletonList(mainTableTab));
+            dataTableTabPane.getSelectionModel().select(mainTableTab);
+        }
 
         Label insightBadge = new Label("💡 KEY SYSTEM INSIGHT");
         insightBadge.setStyle("-fx-background-color: #059669; -fx-text-fill: white; -fx-font-size: 10.5px; -fx-font-weight: bold; -fx-padding: 2 6; -fx-background-radius: 4;");
@@ -1187,6 +1203,15 @@ public class AnalyticsDashboard {
 
         List<MetricRow> merged = mergeMultiCaseRows(baseRows, multiCaseRows);
 
+        List<MetricRow> tableRows = merged;
+        if ("voltage_violations".equals(c.id)) {
+            tableRows = mergeMultiCaseRows(voltageViolationBusRows(baseResults), multiCaseViolationBusRows());
+        } else if ("angle_spread".equals(c.id)) {
+            tableRows = mergeMultiCaseRows(angleSpreadBusRows(baseResults), multiCaseAngleBusRows());
+        } else if ("voltage_deviation".equals(c.id)) {
+            tableRows = mergeMultiCaseRows(voltageDeviationBusRows(baseResults), multiCaseDeviationBusRows());
+        }
+
         if (c.kpiOnly) {
             renderKpis(merged);
         } else {
@@ -1194,7 +1219,7 @@ public class AnalyticsDashboard {
             chartHost.getChildren().setAll(buildChart(merged, selectedType, c));
         }
 
-        buildMultiCaseTable(merged, c.unit);
+        buildMultiCaseTable(tableRows, c.unit);
     }
 
     private List<MetricRow> mergeMultiCaseRows(List<MetricRow> baseRows, Map<String, List<MetricRow>> multiCaseRows) {
@@ -1244,6 +1269,22 @@ public class AnalyticsDashboard {
 
         NumberAxis yAxis = new NumberAxis();
         yAxis.setLabel(category.unit);
+
+        boolean isVoltageAssessment = "Voltage Profile Assessment".equals(category.group);
+        if (isVoltageAssessment) {
+            yAxis.setMinorTickVisible(false);
+            yAxis.setTickLabelFormatter(new javafx.util.StringConverter<Number>() {
+                @Override
+                public String toString(Number object) {
+                    return object != null ? String.valueOf((int) Math.round(object.doubleValue())) : "";
+                }
+
+                @Override
+                public Number fromString(String string) {
+                    return (string != null && !string.isEmpty()) ? Double.parseDouble(string) : 0.0;
+                }
+            });
+        }
 
         XYChart<String, Number> chart;
 
@@ -1315,9 +1356,11 @@ public class AnalyticsDashboard {
     }
 
     private Node buildPieChart(List<MetricRow> rows, String unit) {
+        boolean isVoltageAssessment = currentCategory != null && "Voltage Profile Assessment".equals(currentCategory.group);
         List<PieChart.Data> data = new ArrayList<>();
         for (MetricRow r : rows) {
-            data.add(new PieChart.Data(r.label + " (" + formatValue(r.baseValue) + " " + unit + ")",
+            String valStr = isVoltageAssessment ? String.valueOf((int) Math.round(r.baseValue)) : formatValue(r.baseValue);
+            data.add(new PieChart.Data(r.label + " (" + valStr + " " + unit + ")",
                     Math.max(r.baseValue, 0)));
         }
         PieChart pie = new PieChart(FXCollections.observableArrayList(data));
@@ -1329,7 +1372,7 @@ public class AnalyticsDashboard {
         for (PieChart.Data d : pie.getData()) {
             d.nodeProperty().addListener((obs, oldN, newN) -> {
                 if (newN != null) {
-                    Tooltip tip = new Tooltip(d.getName());
+                    Tooltip tip = new Tooltip(d.getName() + (isVoltageAssessment ? "\n💡 Click to inspect individual bus data table" : ""));
                     tip.setShowDelay(javafx.util.Duration.millis(50));
                     Tooltip.install(newN, tip);
                     newN.setOnMouseEntered(e -> {
@@ -1341,6 +1384,7 @@ public class AnalyticsDashboard {
                         newN.setScaleX(1.0);
                         newN.setScaleY(1.0);
                     });
+                    newN.setOnMouseClicked(e -> handleChartElementClick(d.getName(), d.getPieValue(), "Base Case"));
                 }
             });
         }
@@ -1472,6 +1516,7 @@ public class AnalyticsDashboard {
         overlay.getChildren().clear();
         if (!showValueLabels) return;
 
+        boolean isVoltageAssessment = currentCategory != null && "Voltage Profile Assessment".equals(currentCategory.group);
         List<ChartLabelItem> labelItems = new ArrayList<>();
         ObservableList<XYChart.Series<String, Number>> seriesList = chart.getData();
 
@@ -1487,7 +1532,8 @@ public class AnalyticsDashboard {
                 if (Math.abs(raw) > 1e9) continue; // skip diverged exploded values
                 if (Math.abs(raw) < 0.0001) continue; // skip zero values to prevent label clutter
 
-                Label label = new Label(formatValue(raw));
+                String valStr = isVoltageAssessment ? String.valueOf((int) Math.round(raw)) : formatValue(raw);
+                Label label = new Label(valStr);
                 label.setStyle(String.format(
                         "-fx-font-size: 9px; -fx-font-weight: bold; -fx-text-fill: %s; "
                         + "-fx-background-color: rgba(255,255,255,0.95); -fx-background-radius: 3; "
@@ -1498,7 +1544,7 @@ public class AnalyticsDashboard {
                 overlay.getChildren().add(label);
 
                 // Tooltip on the label itself
-                Tooltip lblTip = new Tooltip(seriesName + ": " + d.getXValue() + " = " + formatValue(raw));
+                Tooltip lblTip = new Tooltip(seriesName + ": " + d.getXValue() + " = " + valStr);
                 lblTip.setShowDelay(javafx.util.Duration.millis(50));
                 label.setTooltip(lblTip);
 
@@ -1524,8 +1570,12 @@ public class AnalyticsDashboard {
 
     private void setupDataNode(Node node, XYChart.Data<String, Number> d, String seriesName, double raw,
                                List<ChartLabelItem> labelItems, Pane overlay) {
+        boolean isVoltageAssessment = currentCategory != null && "Voltage Profile Assessment".equals(currentCategory.group);
+        String valStr = isVoltageAssessment ? String.valueOf((int) Math.round(raw)) : formatValue(raw);
+
         // 1. Rich interactive tooltip on the data point
-        String tipText = String.format("%s\n• Parameter: %s\n• Value: %s", seriesName, d.getXValue(), formatValue(raw));
+        String tipText = String.format("%s\n• Parameter: %s\n• Value: %s%s", seriesName, d.getXValue(), valStr,
+                isVoltageAssessment ? "\n💡 Click to inspect individual bus data table" : "");
         Tooltip tip = new Tooltip(tipText);
         tip.setShowDelay(javafx.util.Duration.millis(50));
         tip.setStyle("-fx-font-size: 11.5px; -fx-font-weight: 500;");
@@ -1541,6 +1591,9 @@ public class AnalyticsDashboard {
             node.setScaleX(1.0);
             node.setScaleY(1.0);
         });
+
+        // 3. Interactive click to open drill-down table
+        node.setOnMouseClicked(e -> handleChartElementClick(d.getXValue(), raw, seriesName));
 
         node.boundsInParentProperty().addListener((obs, oldB, newB) -> repositionAllLabels(labelItems, overlay));
         javafx.application.Platform.runLater(() -> repositionAllLabels(labelItems, overlay));
@@ -1710,39 +1763,429 @@ public class AnalyticsDashboard {
         table.getColumns().clear();
         table.getItems().clear();
 
-        TableColumn<MetricRow, String> labelCol = new TableColumn<>(currentCategory.axisLabel);
+        String col1Header = currentCategory.axisLabel;
+        String baseColHeader = "Base Case (" + unit + ")";
+
+        if ("voltage_profile".equals(currentCategory.id)) {
+            col1Header = "Voltage Band (p.u.)";
+            baseColHeader = "Number of Buses (Base Case)";
+        } else if ("voltage_violations".equals(currentCategory.id)) {
+            col1Header = "Bus Number";
+            baseColHeader = "Voltage p.u. (Base Case)";
+        } else if ("angle_spread".equals(currentCategory.id)) {
+            col1Header = "Bus Number";
+            baseColHeader = "Degrees (Base Case)";
+        } else if ("voltage_deviation".equals(currentCategory.id)) {
+            col1Header = "Bus Number";
+            baseColHeader = "% deviation (Base Case)";
+        }
+
+        final boolean isIntValues = "voltage_profile".equals(currentCategory.id);
+
+        TableColumn<MetricRow, String> labelCol = new TableColumn<>(col1Header);
         labelCol.setCellValueFactory(new PropertyValueFactory<>("label"));
         labelCol.setPrefWidth(260);
 
-        TableColumn<MetricRow, String> baseCol = new TableColumn<>("Base Case (" + unit + ")");
-        baseCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(
-                formatValue(d.getValue().baseValue)));
-        baseCol.setPrefWidth(140);
+        final String finalBaseColHeader = baseColHeader;
+        TableColumn<MetricRow, String> baseCol = new TableColumn<>(finalBaseColHeader);
+        baseCol.setCellValueFactory(d -> {
+            double v = d.getValue().baseValue;
+            String text = isIntValues ? String.valueOf((int) Math.round(v)) : formatValue(v);
+            return new javafx.beans.property.SimpleStringProperty(text);
+        });
+        baseCol.setPrefWidth(160);
 
         table.getColumns().addAll(labelCol, baseCol);
 
         for (CaseStudy cs : activeSelectedCases) {
             String cName = cs.name;
-            TableColumn<MetricRow, String> valCol = new TableColumn<>(cName + " (" + unit + ")");
+            String valColHeader = cName + " (" + unit + ")";
+            if ("voltage_profile".equals(currentCategory.id)) {
+                valColHeader = cName + " (Number of buses)";
+            } else if ("voltage_violations".equals(currentCategory.id)) {
+                valColHeader = cName + " (Voltage p.u.)";
+            } else if ("angle_spread".equals(currentCategory.id)) {
+                valColHeader = cName + " (Degrees)";
+            } else if ("voltage_deviation".equals(currentCategory.id)) {
+                valColHeader = cName + " (% deviation)";
+            }
+
+            TableColumn<MetricRow, String> valCol = new TableColumn<>(valColHeader);
             valCol.setCellValueFactory(d -> {
                 Double v = d.getValue().caseValues.get(cName);
-                return new javafx.beans.property.SimpleStringProperty(v != null ? formatValue(v) : "\u2014");
+                if (v == null) return new javafx.beans.property.SimpleStringProperty("—");
+                String text = isIntValues ? String.valueOf((int) Math.round(v)) : formatValue(v);
+                return new javafx.beans.property.SimpleStringProperty(text);
             });
-            valCol.setPrefWidth(140);
+            valCol.setPrefWidth(150);
 
             TableColumn<MetricRow, String> deltaCol = new TableColumn<>("Δ vs Base (" + cs.hierarchicalId + ")");
             deltaCol.setCellValueFactory(d -> {
                 Double v = d.getValue().caseValues.get(cName);
-                if (v == null) return new javafx.beans.property.SimpleStringProperty("\u2014");
+                if (v == null) return new javafx.beans.property.SimpleStringProperty("—");
                 double delta = v - d.getValue().baseValue;
-                return new javafx.beans.property.SimpleStringProperty((delta >= 0 ? "+" : "") + formatValue(delta));
+                String text = isIntValues ? String.format("%+d", (int) Math.round(delta)) : ((delta >= 0 ? "+" : "") + formatValue(delta));
+                return new javafx.beans.property.SimpleStringProperty(text);
             });
-            deltaCol.setPrefWidth(130);
+            deltaCol.setPrefWidth(140);
 
             table.getColumns().addAll(valCol, deltaCol);
         }
 
         table.getItems().setAll(rows);
+    }
+
+    private void handleChartElementClick(String binLabel, double countVal, String seriesName) {
+        if (currentCategory == null || !"Voltage Profile Assessment".equals(currentCategory.group)) {
+            return;
+        }
+
+        List<Bus> matchingBuses = new ArrayList<>();
+        String tabTitle = "Buses @ " + binLabel;
+
+        if ("voltage_profile".equals(currentCategory.id)) {
+            if ("<0.5".equals(binLabel) || binLabel.startsWith("<")) {
+                matchingBuses = baseResults.buses.stream().filter(b -> b.voltagePu < 0.5).collect(Collectors.toList());
+                tabTitle = "Buses @ <0.5 p.u.";
+            } else if (binLabel.contains("-")) {
+                String[] parts = binLabel.split("-");
+                try {
+                    double lo = Double.parseDouble(parts[0].trim());
+                    double hi = Double.parseDouble(parts[1].trim());
+                    matchingBuses = baseResults.buses.stream().filter(b -> b.voltagePu >= lo && b.voltagePu < hi + 0.0001).collect(Collectors.toList());
+                } catch (Exception ignored) {
+                    matchingBuses = baseResults.buses;
+                }
+                tabTitle = "Buses @ " + binLabel + " p.u.";
+            } else {
+                tabTitle = "Buses @ " + binLabel + " p.u.";
+                matchingBuses = baseResults.buses;
+            }
+        } else if ("voltage_violations".equals(currentCategory.id)) {
+            if (binLabel.contains("-")) {
+                String[] parts = binLabel.split("-");
+                try {
+                    double lo = Double.parseDouble(parts[0].trim());
+                    double hi = Double.parseDouble(parts[1].trim());
+                    matchingBuses = baseResults.buses.stream()
+                            .filter(b -> b.hasVoltageViolation() && b.voltagePu >= lo && b.voltagePu < hi + 0.0001)
+                            .collect(Collectors.toList());
+                } catch (Exception ignored) {
+                    matchingBuses = baseResults.buses.stream().filter(Bus::hasVoltageViolation).collect(Collectors.toList());
+                }
+                tabTitle = "Violations @ " + binLabel + " p.u.";
+            } else {
+                matchingBuses = baseResults.buses.stream().filter(Bus::hasVoltageViolation).collect(Collectors.toList());
+                tabTitle = "Violations @ " + binLabel;
+            }
+        } else if ("angle_spread".equals(currentCategory.id)) {
+            if (binLabel.contains("to")) {
+                String[] parts = binLabel.replace("°", "").split("to");
+                try {
+                    double lo = Double.parseDouble(parts[0].trim());
+                    double hi = Double.parseDouble(parts[1].trim());
+                    matchingBuses = baseResults.buses.stream()
+                            .filter(b -> b.angleDeg >= lo && b.angleDeg < hi + 0.0001)
+                            .collect(Collectors.toList());
+                } catch (Exception ignored) {
+                    matchingBuses = baseResults.buses;
+                }
+                tabTitle = "Buses @ " + binLabel;
+            } else {
+                tabTitle = "Buses @ " + binLabel;
+                matchingBuses = baseResults.buses;
+            }
+        } else if ("voltage_deviation".equals(currentCategory.id)) {
+            if (binLabel.contains("to")) {
+                String[] parts = binLabel.replace("%", "").replace("+", "").split("to");
+                try {
+                    double lo = Double.parseDouble(parts[0].trim());
+                    double hi = Double.parseDouble(parts[1].trim());
+                    matchingBuses = baseResults.buses.stream()
+                            .filter(b -> {
+                                double dev = (b.voltagePu - 1.0) * 100.0;
+                                return dev >= lo && dev < hi + 0.0001;
+                            })
+                            .collect(Collectors.toList());
+                } catch (Exception ignored) {
+                    matchingBuses = baseResults.buses;
+                }
+                tabTitle = "Buses @ " + binLabel;
+            } else {
+                tabTitle = "Buses @ " + binLabel;
+                matchingBuses = baseResults.buses;
+            }
+        }
+
+        openDrillDownTab(tabTitle, matchingBuses, currentCategory);
+    }
+
+    private void openDrillDownTab(String tabTitle, List<Bus> matchingBuses, Category cat) {
+        if (dataTableTabPane == null) return;
+
+        // Check if tab already exists
+        for (Tab t : dataTableTabPane.getTabs()) {
+            if (tabTitle.equals(t.getText())) {
+                dataTableTabPane.getSelectionModel().select(t);
+                return;
+            }
+        }
+
+        List<BusDetailRow> detailRows = new ArrayList<>();
+        for (Bus b : matchingBuses) {
+            BusDetailRow row = new BusDetailRow(b);
+            for (CaseStudy cs : activeSelectedCases) {
+                Out0Results res = solvedCases.get(cs.id);
+                if (res != null) {
+                    double v = res.buses.stream()
+                            .filter(x -> x.number == b.number)
+                            .mapToDouble(x -> x.voltagePu)
+                            .findFirst().orElse(b.voltagePu);
+                    row.caseVoltages.put(cs.name, v);
+                }
+            }
+            detailRows.add(row);
+        }
+
+        TableView<BusDetailRow> drillTable = new TableView<>();
+        drillTable.setPrefHeight(300);
+
+        TableColumn<BusDetailRow, Number> numCol = new TableColumn<>("Bus Number");
+        numCol.setCellValueFactory(new PropertyValueFactory<>("busNumber"));
+        numCol.setPrefWidth(90);
+
+        TableColumn<BusDetailRow, String> nameCol = new TableColumn<>("Bus Name");
+        nameCol.setCellValueFactory(new PropertyValueFactory<>("busName"));
+        nameCol.setPrefWidth(140);
+
+        TableColumn<BusDetailRow, String> vCol = new TableColumn<>("Voltage (p.u.)");
+        vCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format("%.4f", d.getValue().getVoltagePu())));
+        vCol.setPrefWidth(100);
+
+        TableColumn<BusDetailRow, String> vrCol = new TableColumn<>("% VR");
+        vrCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format("%+.2f%%", d.getValue().getVoltageReg())));
+        vrCol.setPrefWidth(85);
+
+        TableColumn<BusDetailRow, String> angCol = new TableColumn<>("Angle (°)");
+        angCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format("%.2f°", d.getValue().getAngleDeg())));
+        angCol.setPrefWidth(85);
+
+        TableColumn<BusDetailRow, String> mwLoadCol = new TableColumn<>("MW Load");
+        mwLoadCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format("%.2f", d.getValue().getMwLoad())));
+        mwLoadCol.setPrefWidth(85);
+
+        TableColumn<BusDetailRow, String> mvarLoadCol = new TableColumn<>("MVAr Load");
+        mvarLoadCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format("%.2f", d.getValue().getMvarLoad())));
+        mvarLoadCol.setPrefWidth(85);
+
+        TableColumn<BusDetailRow, String> mwGenCol = new TableColumn<>("MW Gen");
+        mwGenCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format("%.2f", d.getValue().getMwGen())));
+        mwGenCol.setPrefWidth(85);
+
+        TableColumn<BusDetailRow, String> mvarGenCol = new TableColumn<>("MVAr Gen");
+        mvarGenCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format("%.2f", d.getValue().getMvarGen())));
+        mvarGenCol.setPrefWidth(85);
+
+        TableColumn<BusDetailRow, String> statCol = new TableColumn<>("Violation Status");
+        statCol.setCellValueFactory(new PropertyValueFactory<>("violationStatus"));
+        statCol.setPrefWidth(140);
+
+        drillTable.getColumns().addAll(numCol, nameCol, vCol, vrCol, angCol, mwLoadCol, mvarLoadCol, mwGenCol, mvarGenCol, statCol);
+
+        for (CaseStudy cs : activeSelectedCases) {
+            String cName = cs.name;
+            TableColumn<BusDetailRow, String> caseVCol = new TableColumn<>(cName + " V (p.u.)");
+            caseVCol.setCellValueFactory(d -> {
+                Double v = d.getValue().caseVoltages.get(cName);
+                return new javafx.beans.property.SimpleStringProperty(v != null ? String.format("%.4f", v) : "—");
+            });
+            caseVCol.setPrefWidth(110);
+            drillTable.getColumns().add(caseVCol);
+        }
+
+        drillTable.getItems().setAll(detailRows);
+
+        HBox tabToolbar = new HBox(10);
+        tabToolbar.setAlignment(Pos.CENTER_LEFT);
+        tabToolbar.setPadding(new Insets(4, 8, 4, 8));
+        tabToolbar.setStyle("-fx-background-color: #F8FAFC; -fx-border-color: #CBD5E1; -fx-border-width: 0 0 1 0;");
+
+        Label badge = new Label("📊 " + tabTitle + " (" + detailRows.size() + " buses)");
+        badge.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #0F172A;");
+        HBox.setHgrow(badge, Priority.ALWAYS);
+
+        Button addDocBtn = new Button("➕ Add to Report");
+        addDocBtn.setStyle("-fx-background-color: #10B981; -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; -fx-background-radius: 4; -fx-padding: 3 8; -fx-cursor: hand;");
+        addDocBtn.setOnAction(e -> {
+            List<String> activeNames = activeSelectedCases.stream().map(c -> c.name).collect(Collectors.toList());
+            String summary = String.format("Drill-Down Data Table: %s with %d matching buses in %s.", tabTitle, detailRows.size(), cat.title);
+            documentItems.add(new SavedCustomization.SavedChartItem(
+                    cat.id, tabTitle, "Data Table",
+                    cat.axisLabel, cat.unit, cat.unit,
+                    summary, "", activeNames
+            ));
+            refreshDocumentList();
+            Alert ok = new Alert(Alert.AlertType.INFORMATION, "Added '" + tabTitle + "' drill-down table to Document Builder.", ButtonType.OK);
+            ok.setHeaderText(null);
+            ok.show();
+        });
+
+        Button snapBtn = new Button("📷 Snapshot");
+        snapBtn.setStyle("-fx-background-color: #0284C7; -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; -fx-background-radius: 4; -fx-padding: 3 8; -fx-cursor: hand;");
+        snapBtn.setOnAction(e -> {
+            try {
+                WritableImage image = drillTable.snapshot(new SnapshotParameters(), null);
+                FileChooser fileChooser = new FileChooser();
+                fileChooser.setTitle("Save Drill-Down Table Snapshot");
+                fileChooser.setInitialFileName(tabTitle.replace(" ", "_").replace("<", "lt_").replace(">", "gt_").replace("@", "at") + "_snapshot.png");
+                fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG Image", "*.png"));
+                File file = fileChooser.showSaveDialog(null);
+                if (file != null) {
+                    ImageIO.write(SwingFXUtils.fromFXImage(image, null), "png", file);
+                    Alert ok = new Alert(Alert.AlertType.INFORMATION, "Snapshot saved to " + file.getName(), ButtonType.OK);
+                    ok.setHeaderText(null);
+                    ok.show();
+                }
+            } catch (Exception ex) {
+                Alert err = new Alert(Alert.AlertType.ERROR, "Failed to capture snapshot: " + ex.getMessage(), ButtonType.OK);
+                err.setHeaderText(null);
+                err.show();
+            }
+        });
+
+        Tab newTab = new Tab(tabTitle);
+        newTab.setClosable(true);
+
+        Button closeBtn = new Button("❌ Close");
+        closeBtn.setStyle("-fx-background-color: #EF4444; -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; -fx-background-radius: 4; -fx-padding: 3 8; -fx-cursor: hand;");
+        closeBtn.setOnAction(e -> confirmCloseTableTab(newTab));
+
+        tabToolbar.getChildren().addAll(badge, addDocBtn, snapBtn, closeBtn);
+
+        VBox tabContent = new VBox(4, tabToolbar, drillTable);
+        VBox.setVgrow(drillTable, Priority.ALWAYS);
+        newTab.setContent(tabContent);
+
+        newTab.setOnCloseRequest(e -> {
+            e.consume();
+            confirmCloseTableTab(newTab);
+        });
+
+        dataTableTabPane.getTabs().add(newTab);
+        dataTableTabPane.getSelectionModel().select(newTab);
+    }
+
+    private void confirmCloseTableTab(Tab tab) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Close Data Table Tab");
+        alert.setHeaderText(null);
+        alert.setContentText("Are you sure you want to close this data table tab?");
+        ButtonType confirmBtn = new ButtonType("Confirm", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelBtn = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(confirmBtn, cancelBtn);
+        Optional<ButtonType> res = alert.showAndWait();
+        if (res.isPresent() && res.get() == confirmBtn) {
+            dataTableTabPane.getTabs().remove(tab);
+        }
+    }
+
+    private List<MetricRow> voltageViolationBusRows(Out0Results res) {
+        List<MetricRow> rows = new ArrayList<>();
+        for (Bus b : res.buses) {
+            if (b.hasVoltageViolation()) {
+                String flag = b.isBelowMinVoltage() ? "(@ Below Min)" : "(# Above Max)";
+                rows.add(new MetricRow(b.number + " " + b.name + " " + flag, b.voltagePu));
+            }
+        }
+        rows.sort((a, b) -> Double.compare(a.baseValue, b.baseValue));
+        return rows;
+    }
+
+    private Map<String, List<MetricRow>> multiCaseViolationBusRows() {
+        Map<String, List<MetricRow>> map = new LinkedHashMap<>();
+        for (CaseStudy cs : activeSelectedCases) {
+            Out0Results res = solvedCases.get(cs.id);
+            if (res != null) {
+                map.put(cs.name, voltageViolationBusRows(res));
+            }
+        }
+        return map;
+    }
+
+    private List<MetricRow> angleSpreadBusRows(Out0Results res) {
+        return res.buses.stream()
+                .sorted((a, b) -> Double.compare(Math.abs(b.angleDeg), Math.abs(a.angleDeg)))
+                .limit(30)
+                .map(b -> new MetricRow(b.number + " " + b.name, b.angleDeg))
+                .collect(Collectors.toList());
+    }
+
+    private Map<String, List<MetricRow>> multiCaseAngleBusRows() {
+        Map<String, List<MetricRow>> map = new LinkedHashMap<>();
+        for (CaseStudy cs : activeSelectedCases) {
+            Out0Results res = solvedCases.get(cs.id);
+            if (res != null) {
+                map.put(cs.name, angleSpreadBusRows(res));
+            }
+        }
+        return map;
+    }
+
+    private List<MetricRow> voltageDeviationBusRows(Out0Results res) {
+        return res.buses.stream()
+                .sorted((a, b) -> Double.compare(Math.abs((b.voltagePu - 1.0) * 100.0), Math.abs((a.voltagePu - 1.0) * 100.0)))
+                .limit(30)
+                .map(b -> new MetricRow(b.number + " " + b.name, (b.voltagePu - 1.0) * 100.0))
+                .collect(Collectors.toList());
+    }
+
+    private Map<String, List<MetricRow>> multiCaseDeviationBusRows() {
+        Map<String, List<MetricRow>> map = new LinkedHashMap<>();
+        for (CaseStudy cs : activeSelectedCases) {
+            Out0Results res = solvedCases.get(cs.id);
+            if (res != null) {
+                map.put(cs.name, voltageDeviationBusRows(res));
+            }
+        }
+        return map;
+    }
+
+    public static class BusDetailRow {
+        public final int busNumber;
+        public final String busName;
+        public final double voltagePu;
+        public final double voltageReg;
+        public final double angleDeg;
+        public final double mwLoad;
+        public final double mvarLoad;
+        public final double mwGen;
+        public final double mvarGen;
+        public final String violationStatus;
+        public final Map<String, Double> caseVoltages = new LinkedHashMap<>();
+
+        public BusDetailRow(Bus b) {
+            this.busNumber = b.number;
+            this.busName = b.name;
+            this.voltagePu = b.voltagePu;
+            this.voltageReg = (b.voltagePu - 1.0) * 100.0;
+            this.angleDeg = b.angleDeg;
+            this.mwLoad = b.mwLoad;
+            this.mvarLoad = b.mvarLoad;
+            this.mwGen = b.mwGeneration;
+            this.mvarGen = b.mvarGeneration;
+            this.violationStatus = b.isBelowMinVoltage() ? "⚠️ Undervoltage (@)" : (b.isAboveMaxVoltage() ? "⚠️ Overvoltage (#)" : "Normal (OK)");
+        }
+
+        public int getBusNumber() { return busNumber; }
+        public String getBusName() { return busName; }
+        public double getVoltagePu() { return voltagePu; }
+        public double getVoltageReg() { return voltageReg; }
+        public double getAngleDeg() { return angleDeg; }
+        public double getMwLoad() { return mwLoad; }
+        public double getMvarLoad() { return mvarLoad; }
+        public double getMwGen() { return mwGen; }
+        public double getMvarGen() { return mvarGen; }
+        public String getViolationStatus() { return violationStatus; }
     }
 
     private static String formatValue(double v) {
@@ -1798,13 +2241,13 @@ public class AnalyticsDashboard {
         vProfile.group = "Voltage Profile Assessment";
         vProfile.title = "Voltage Profile Distribution & Dispersion";
         vProfile.axisLabel = "Voltage Band (p.u.)";
-        vProfile.unit = "buses";
+        vProfile.unit = "Number of buses";
         vProfile.dat0Table = "Section 1.2 % Bus Specifications (Columns: Bus ID, Voltage Min (Vmin=0.95), Voltage Max (Vmax=1.05), Bus Type)";
         vProfile.out0Table = "|***** BUS VOLTAGES AND POWERS *****| (Columns: NODE NO., FROM NAME, V-MAG (p.u.), % VR, ANGLE)";
-        vProfile.formulaProof = "V_pu = V_actual / V_nominal,  %VR = ((V_pu - 1.0) / 1.0) × 100%,  Bucketed in 0.02 p.u. intervals.";
+        vProfile.formulaProof = "V_pu = V_actual / V_nominal,  %VR = ((V_pu - 1.0) / 1.0) × 100%,  Bucketed in 0.02 p.u. intervals (Consolidated <0.5 p.u.).";
         vProfile.sourceColumns = "BUS VOLTAGES AND POWERS -> V-MAG (p.u.)";
         vProfile.scalingSource = "Base Case min/max voltage bounds (p.u.)";
-        vProfile.description = "Distribution of all network bus voltages bucketed into 0.02 p.u. intervals.";
+        vProfile.description = "Distribution of all network bus voltages bucketed into 0.02 p.u. intervals with consolidated <0.5 p.u. bin.";
         vProfile.healthyRange = "0.95 to 1.05 p.u. (Nominal: 1.00 p.u.)";
         vProfile.simpleExplanation = "We analyze bus voltages to verify that all customer and substation equipment receive electrical potential within safe operational limits (typically 0.95 to 1.05 p.u.). Voltages outside this band cause motor burnout, inverter tripping, and transmission line instability.";
         vProfile.action = "Tight voltage distribution around 1.00 p.u. signals stable network voltage. Drifts indicate reactive compensation needs.";
@@ -1824,8 +2267,8 @@ public class AnalyticsDashboard {
         vViolations.shortName = "V-Violations";
         vViolations.group = "Voltage Profile Assessment";
         vViolations.title = "Voltage Limit Violations & Outliers";
-        vViolations.axisLabel = "Bus Identifier";
-        vViolations.unit = "p.u.";
+        vViolations.axisLabel = "Voltage (p.u.)";
+        vViolations.unit = "Number of buses";
         vViolations.dat0Table = "Section 1.2 % Bus Data (Columns: BusNo, V_min_limit, V_max_limit) & Common Control Options";
         vViolations.out0Table = "|***** BUS VOLTAGES AND POWERS *****| (Flag '@' indicates Undervoltage < Vmin, '#' indicates Overvoltage > Vmax)";
         vViolations.formulaProof = "Condition: V_MAG < V_min (Undervoltage) OR V_MAG > V_max (Overvoltage). Outlier magnitude = |V_MAG - 1.0|.";
@@ -1849,8 +2292,8 @@ public class AnalyticsDashboard {
         angleSpread.shortName = "Angle Spread";
         angleSpread.group = "Voltage Profile Assessment";
         angleSpread.title = "Voltage Angle Spread (Rotor Stability Indicator)";
-        angleSpread.axisLabel = "Bus";
-        angleSpread.unit = "deg";
+        angleSpread.axisLabel = "Degrees";
+        angleSpread.unit = "Number of buses";
         angleSpread.dat0Table = "Section 1.2 % Bus Specifications (Slack Bus angle fixed at θ_ref = 0.0°)";
         angleSpread.out0Table = "|***** BUS VOLTAGES AND POWERS *****| (Columns: NODE NO., FROM NAME, ANGLE DEGREE)";
         angleSpread.formulaProof = "Δθ_max = max(θ_bus) - min(θ_bus).  Power transfer: P_ij ≈ (V_i V_j / X_ij) sin(θ_i - θ_j).";
@@ -1869,23 +2312,23 @@ public class AnalyticsDashboard {
         voltageDev.shortName = "V-Deviation";
         voltageDev.group = "Voltage Profile Assessment";
         voltageDev.title = "Voltage Deviation from Nominal (p.u.) — Stress Map";
-        voltageDev.axisLabel = "Bus";
-        voltageDev.unit = "% deviation";
+        voltageDev.axisLabel = "% Deviation";
+        voltageDev.unit = "Number of buses";
         voltageDev.dat0Table = "Section 1.2 % Bus Data (Nominal Base Voltage = 1.0 p.u.)";
         voltageDev.out0Table = "|***** BUS VOLTAGES AND POWERS *****| (Columns: NODE NO., FROM NAME, V-MAG, % VR)";
         voltageDev.formulaProof = "ΔV% = ((V_bus_pu - 1.0) / 1.0) × 100%.  Positive = Overvoltage (+ΔV), Negative = Undervoltage (-ΔV).";
         voltageDev.sourceColumns = "BUS VOLTAGES AND POWERS -> V-MAG (p.u.), computed as (V - 1.0) × 100%";
         voltageDev.scalingSource = "Base Case bus voltage, nominal = 1.0 p.u.";
-        voltageDev.description = "Percentage deviation of each bus voltage from the 1.0 p.u. nominal. Negative = undervoltage (reactive deficit), Positive = overvoltage (leading reactive surplus or lightly loaded network).";
+        voltageDev.description = "Percentage deviation of each bus voltage from the 1.0 p.u. nominal.";
         voltageDev.healthyRange = "Within ±3.0% deviation from nominal (Grid code trip limit: ±5.0%)";
         voltageDev.simpleExplanation = "Visualizes voltage stress across all nodes in percentage terms. Deviations beyond ±5% violate grid codes and degrade consumer appliance performance.";
-        voltageDev.action = "Sustained deviation >±5% degrades motor efficiency (motor torque ∝ V²), increases cable losses, and triggers equipment protection relays. Undervoltage buses need shunt capacitors or tap adjustment; overvoltage buses may need shunt reactors or tap reduction.";
+        voltageDev.action = "Sustained deviation >±5% degrades motor efficiency (motor torque ∝ V²), increases cable losses, and triggers equipment protection relays.";
         voltageDev.topN = 20;
         voltageDev.rowsFn = this::voltageDeviationRows;
         voltageDev.insightFn = (base, cases) -> {
             double avgDev = base.buses.stream().mapToDouble(b -> Math.abs(b.voltagePu - 1.0) * 100).average().orElse(0);
             long severeCount = base.buses.stream().filter(b -> Math.abs(b.voltagePu - 1.0) * 100 > 5.0).count();
-            return String.format("Average voltage deviation: %.2f%%. %d bus(es) exceed ±5%% deviation threshold — these require immediate voltage control action (tap adjustment, VAr injection, or generator AVR setpoint change).", avgDev, severeCount);
+            return String.format("Average voltage deviation: %.2f%%. %d bus(es) exceed ±5%% deviation threshold — these require immediate voltage control action.", avgDev, severeCount);
         };
         categories.add(voltageDev);
 
@@ -2327,7 +2770,11 @@ public class AnalyticsDashboard {
     private List<MetricRow> voltageProfileRows(Out0Results target, Out0Results scaleRef) {
         double[] refV = scaleRef.buses.stream().mapToDouble(b -> b.voltagePu).toArray();
         if (refV.length == 0) return List.of();
-        double min = Arrays.stream(refV).min().orElse(0.9);
+
+        long countUnder05 = target.buses.stream().filter(b -> b.voltagePu < 0.5).count();
+        long refUnder05 = scaleRef.buses.stream().filter(b -> b.voltagePu < 0.5).count();
+
+        double min = Math.max(0.5, Arrays.stream(refV).filter(v -> v >= 0.5).min().orElse(0.9));
         double max = Arrays.stream(refV).max().orElse(1.1);
         double bin = 0.02;
         double lo = Math.floor(min / bin) * bin;
@@ -2336,6 +2783,38 @@ public class AnalyticsDashboard {
         int nBins = Math.max(1, (int) Math.round((hi - lo) / bin));
         int[] counts = new int[nBins];
         for (Bus b : target.buses) {
+            if (b.voltagePu >= 0.5) {
+                int idx = (int) Math.floor((b.voltagePu - lo) / bin);
+                idx = Math.max(0, Math.min(nBins - 1, idx));
+                counts[idx]++;
+            }
+        }
+        List<MetricRow> rows = new ArrayList<>();
+        if (countUnder05 > 0 || refUnder05 > 0) {
+            rows.add(new MetricRow("<0.5", (double) countUnder05));
+        }
+        for (int i = 0; i < nBins; i++) {
+            double a = lo + i * bin;
+            rows.add(new MetricRow(String.format("%.2f-%.2f", a, a + bin), (double) counts[i]));
+        }
+        return rows;
+    }
+
+    private List<MetricRow> voltageViolationRows(Out0Results target, Out0Results scaleRef) {
+        List<Bus> violating = target.buses.stream().filter(Bus::hasVoltageViolation).collect(Collectors.toList());
+        List<Bus> refViolating = scaleRef.buses.stream().filter(Bus::hasVoltageViolation).collect(Collectors.toList());
+        if (violating.isEmpty() && refViolating.isEmpty()) {
+            return List.of();
+        }
+        double min = refViolating.stream().mapToDouble(b -> b.voltagePu).min().orElse(0.90);
+        double max = refViolating.stream().mapToDouble(b -> b.voltagePu).max().orElse(1.10);
+        double bin = 0.02;
+        double lo = Math.floor(min / bin) * bin;
+        double hi = Math.ceil(max / bin) * bin;
+        if (hi <= lo) hi = lo + bin;
+        int nBins = Math.max(1, (int) Math.round((hi - lo) / bin));
+        int[] counts = new int[nBins];
+        for (Bus b : violating) {
             int idx = (int) Math.floor((b.voltagePu - lo) / bin);
             idx = Math.max(0, Math.min(nBins - 1, idx));
             counts[idx]++;
@@ -2343,20 +2822,8 @@ public class AnalyticsDashboard {
         List<MetricRow> rows = new ArrayList<>();
         for (int i = 0; i < nBins; i++) {
             double a = lo + i * bin;
-            rows.add(new MetricRow(String.format("%.2f-%.2f", a, a + bin), counts[i]));
+            rows.add(new MetricRow(String.format("%.2f-%.2f", a, a + bin), (double) counts[i]));
         }
-        return rows;
-    }
-
-    private List<MetricRow> voltageViolationRows(Out0Results target, Out0Results scaleRef) {
-        List<MetricRow> rows = new ArrayList<>();
-        for (Bus b : target.buses) {
-            if (b.hasVoltageViolation()) {
-                String flag = b.isBelowMinVoltage() ? "Below Min" : "Above Max";
-                rows.add(new MetricRow(b.number + " " + b.name + " (" + flag + ")", b.voltagePu));
-            }
-        }
-        rows.sort((a, c) -> Double.compare(a.baseValue, c.baseValue));
         return rows;
     }
 
@@ -2428,16 +2895,25 @@ public class AnalyticsDashboard {
     }
 
     private List<MetricRow> angleSpreadRows(Out0Results target, Out0Results scaleRef) {
-        List<MetricRow> rows = new ArrayList<>();
-        if (!target.buses.isEmpty()) {
-            double maxAngle = target.buses.stream().mapToDouble(b -> b.angleDeg).max().orElse(0);
-            double minAngle = target.buses.stream().mapToDouble(b -> b.angleDeg).min().orElse(0);
-            rows.add(new MetricRow("Angle Spread (Max - Min)", maxAngle - minAngle));
+        if (target.buses.isEmpty()) return List.of();
+        double min = scaleRef.buses.stream().mapToDouble(b -> b.angleDeg).min().orElse(-30.0);
+        double max = scaleRef.buses.stream().mapToDouble(b -> b.angleDeg).max().orElse(30.0);
+        double bin = 5.0;
+        double lo = Math.floor(min / bin) * bin;
+        double hi = Math.ceil(max / bin) * bin;
+        if (hi <= lo) hi = lo + bin;
+        int nBins = Math.max(1, (int) Math.round((hi - lo) / bin));
+        int[] counts = new int[nBins];
+        for (Bus b : target.buses) {
+            int idx = (int) Math.floor((b.angleDeg - lo) / bin);
+            idx = Math.max(0, Math.min(nBins - 1, idx));
+            counts[idx]++;
         }
-        target.buses.stream()
-                .sorted((a, b) -> Double.compare(Math.abs(b.angleDeg), Math.abs(a.angleDeg)))
-                .limit(14)
-                .forEach(b -> rows.add(new MetricRow(b.number + " " + b.name, b.angleDeg)));
+        List<MetricRow> rows = new ArrayList<>();
+        for (int i = 0; i < nBins; i++) {
+            double a = lo + i * bin;
+            rows.add(new MetricRow(String.format("%.0f° to %.0f°", a, a + bin), (double) counts[i]));
+        }
         return rows;
     }
 
@@ -2561,11 +3037,27 @@ public class AnalyticsDashboard {
     }
 
     private List<MetricRow> voltageDeviationRows(Out0Results target, Out0Results scaleRef) {
-        return target.buses.stream()
-                .map(b -> new MetricRow(b.number + " " + b.name, (b.voltagePu - 1.0) * 100.0))
-                .sorted((a, c) -> Double.compare(Math.abs(c.baseValue), Math.abs(a.baseValue)))
-                .limit(20)
-                .collect(Collectors.toList());
+        if (target.buses.isEmpty()) return List.of();
+        double min = scaleRef.buses.stream().mapToDouble(b -> (b.voltagePu - 1.0) * 100.0).min().orElse(-10.0);
+        double max = scaleRef.buses.stream().mapToDouble(b -> (b.voltagePu - 1.0) * 100.0).max().orElse(10.0);
+        double bin = 2.0;
+        double lo = Math.floor(min / bin) * bin;
+        double hi = Math.ceil(max / bin) * bin;
+        if (hi <= lo) hi = lo + bin;
+        int nBins = Math.max(1, (int) Math.round((hi - lo) / bin));
+        int[] counts = new int[nBins];
+        for (Bus b : target.buses) {
+            double dev = (b.voltagePu - 1.0) * 100.0;
+            int idx = (int) Math.floor((dev - lo) / bin);
+            idx = Math.max(0, Math.min(nBins - 1, idx));
+            counts[idx]++;
+        }
+        List<MetricRow> rows = new ArrayList<>();
+        for (int i = 0; i < nBins; i++) {
+            double a = lo + i * bin;
+            rows.add(new MetricRow(String.format("%+.0f%% to %+.0f%%", a, a + bin), (double) counts[i]));
+        }
+        return rows;
     }
 
     private List<MetricRow> underutilizedLinesRows(Out0Results target, Out0Results scaleRef) {

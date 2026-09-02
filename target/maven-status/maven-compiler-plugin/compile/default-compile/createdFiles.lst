@@ -9,6 +9,7 @@ com\prdc\mipower\gui\Workspace.class
 com\prdc\mipower\models\CaseStudy.class
 com\prdc\mipower\services\CustomizationStorage$1.class
 com\prdc\mipower\gui\Workspace$1.class
+com\prdc\mipower\gui\AnalyticsDashboard$BusDetailRow.class
 com\prdc\mipower\utils\ValidationUtils$ValidationResult.class
 com\prdc\mipower\models\HistoryEntry.class
 com\prdc\mipower\services\ChangeResolver$SectionSummary.class
@@ -32,6 +33,7 @@ com\prdc\mipower\parser\DatParser$RowPair.class
 com\prdc\mipower\gui\Workspace$2.class
 com\prdc\mipower\gui\AnalyticsDashboard.class
 com\prdc\mipower\gui\NewCaseDialog.class
+com\prdc\mipower\gui\AnalyticsDashboard$1.class
 com\prdc\mipower\models\CaseStudy$StatusCounts.class
 com\prdc\mipower\gui\ReportWindow.class
 com\prdc\mipower\models\Line.class
