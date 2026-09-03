@@ -1,5 +1,6 @@
 com\prdc\mipower\models\RunResult.class
 com\prdc\mipower\services\RecentFilesService.class
+com\prdc\mipower\gui\AnalyticsDashboard$BranchDetailRow.class
 com\prdc\mipower\gui\ThreeDViewPane.class
 com\prdc\mipower\services\CaseStudyStorage.class
 com\prdc\mipower\gui\AnalyticsDashboard$ChartLabelItem.class

@@ -1,38 +1,38 @@
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\gui\AllCaseStudiesDialog.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\gui\AnalyticsDashboard.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\gui\CaseStudyTreeModel.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\gui\NewCaseDialog.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\gui\ReportWindow.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\gui\RunHistoryWindow.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\gui\ThreeDViewPane.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\gui\Workspace.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\Main.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\Branch.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\Bus.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\CaseStudy.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\ChangeRecord.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\DatRecord.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\DatSection.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\Generator.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\HistoryEntry.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\Line.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\Out0Results.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\RunResult.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\SavedCustomization.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\models\Transformer.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\parser\DatParser.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\parser\Out0ParseError.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\parser\Out0Parser.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\services\CaseStudyManager.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\services\CaseStudyStorage.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\services\ChangeResolver.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\services\CustomizationStorage.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\services\FieldEditabilityService.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\services\MiPowerRunner.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\services\ModificationManager.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\services\ModifierEngine.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\services\RecentFilesService.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\services\ReportGenerator.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\utils\Constants.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\utils\FileUtils.java
-C:\Users\internstudent2\Downloads\version2\PRDC_MiPower_Editor_Updated (1)\PRDC_MiPower_Editor\src\main\java\com\prdc\mipower\utils\ValidationUtils.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\gui\AllCaseStudiesDialog.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\gui\AnalyticsDashboard.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\gui\CaseStudyTreeModel.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\gui\NewCaseDialog.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\gui\ReportWindow.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\gui\RunHistoryWindow.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\gui\ThreeDViewPane.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\gui\Workspace.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\Main.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\Branch.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\Bus.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\CaseStudy.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\ChangeRecord.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\DatRecord.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\DatSection.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\Generator.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\HistoryEntry.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\Line.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\Out0Results.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\RunResult.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\SavedCustomization.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\models\Transformer.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\parser\DatParser.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\parser\Out0ParseError.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\parser\Out0Parser.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\services\CaseStudyManager.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\services\CaseStudyStorage.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\services\ChangeResolver.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\services\CustomizationStorage.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\services\FieldEditabilityService.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\services\MiPowerRunner.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\services\ModificationManager.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\services\ModifierEngine.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\services\RecentFilesService.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\services\ReportGenerator.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\utils\Constants.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\utils\FileUtils.java
+C:\Users\internstudent2\Documents\version3\tests4\src\main\java\com\prdc\mipower\utils\ValidationUtils.java

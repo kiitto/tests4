@@ -82,8 +82,10 @@ import javax.imageio.ImageIO;
 import com.prdc.mipower.models.Branch;
 import com.prdc.mipower.models.Bus;
 import com.prdc.mipower.models.CaseStudy;
+import com.prdc.mipower.models.Line;
 import com.prdc.mipower.models.Out0Results;
 import com.prdc.mipower.models.SavedCustomization;
+import com.prdc.mipower.models.Transformer;
 import com.prdc.mipower.parser.Out0Parser;
 import com.prdc.mipower.services.CaseStudyManager;
 import com.prdc.mipower.services.CustomizationStorage;
@@ -1273,8 +1275,8 @@ public class AnalyticsDashboard {
         NumberAxis yAxis = new NumberAxis();
         yAxis.setLabel(category.unit);
 
-        boolean isVoltageAssessment = "Voltage Profile Assessment".equals(category.group);
-        if (isVoltageAssessment) {
+        boolean isCountAxis = currentCategory != null && ("Voltage Profile Assessment".equals(currentCategory.group) || "Loading".equals(currentCategory.group));
+        if (isCountAxis) {
             yAxis.setMinorTickVisible(false);
             yAxis.setTickLabelFormatter(new javafx.util.StringConverter<Number>() {
                 @Override
@@ -1359,10 +1361,10 @@ public class AnalyticsDashboard {
     }
 
     private Node buildPieChart(List<MetricRow> rows, String unit) {
-        boolean isVoltageAssessment = currentCategory != null && "Voltage Profile Assessment".equals(currentCategory.group);
+        boolean isCountGroup = currentCategory != null && ("Voltage Profile Assessment".equals(currentCategory.group) || "Loading".equals(currentCategory.group));
         List<PieChart.Data> data = new ArrayList<>();
         for (MetricRow r : rows) {
-            String valStr = isVoltageAssessment ? String.valueOf((int) Math.round(r.baseValue)) : formatValue(r.baseValue);
+            String valStr = isCountGroup ? String.valueOf((int) Math.round(r.baseValue)) : formatValue(r.baseValue);
             data.add(new PieChart.Data(r.label + " (" + valStr + " " + unit + ")",
                     Math.max(r.baseValue, 0)));
         }
@@ -1372,10 +1374,15 @@ public class AnalyticsDashboard {
         pie.setPrefHeight(410);
         pie.setAnimated(false);
 
+        boolean isTransformer = currentCategory != null && "transformer_loading".equals(currentCategory.id);
+        boolean isLine = currentCategory != null && "line_loading".equals(currentCategory.id);
+        boolean isBus = currentCategory != null && "Voltage Profile Assessment".equals(currentCategory.group);
+        String entityName = isTransformer ? "transformer" : (isLine ? "transmission line" : (isBus ? "bus" : "record"));
+
         for (PieChart.Data d : pie.getData()) {
             d.nodeProperty().addListener((obs, oldN, newN) -> {
                 if (newN != null) {
-                    Tooltip tip = new Tooltip(d.getName() + (isVoltageAssessment ? "\n💡 Click to inspect individual bus data table" : ""));
+                    Tooltip tip = new Tooltip(d.getName() + (isCountGroup ? ("\n💡 Click to inspect individual " + entityName + " data table") : ""));
                     tip.setShowDelay(javafx.util.Duration.millis(50));
                     Tooltip.install(newN, tip);
                     newN.setOnMouseEntered(e -> {
@@ -1519,7 +1526,7 @@ public class AnalyticsDashboard {
         overlay.getChildren().clear();
         if (!showValueLabels) return;
 
-        boolean isVoltageAssessment = currentCategory != null && "Voltage Profile Assessment".equals(currentCategory.group);
+        boolean isCountGroup = currentCategory != null && ("Voltage Profile Assessment".equals(currentCategory.group) || "Loading".equals(currentCategory.group));
         List<ChartLabelItem> labelItems = new ArrayList<>();
         ObservableList<XYChart.Series<String, Number>> seriesList = chart.getData();
 
@@ -1535,7 +1542,7 @@ public class AnalyticsDashboard {
                 if (Math.abs(raw) > 1e9) continue; // skip diverged exploded values
                 if (Math.abs(raw) < 0.0001) continue; // skip zero values to prevent label clutter
 
-                String valStr = isVoltageAssessment ? String.valueOf((int) Math.round(raw)) : formatValue(raw);
+                String valStr = isCountGroup ? String.valueOf((int) Math.round(raw)) : formatValue(raw);
                 Label label = new Label(valStr);
                 label.setStyle(String.format(
                         "-fx-font-size: 9px; -fx-font-weight: bold; -fx-text-fill: %s; "
@@ -1573,12 +1580,19 @@ public class AnalyticsDashboard {
 
     private void setupDataNode(Node node, XYChart.Data<String, Number> d, String seriesName, double raw,
                                List<ChartLabelItem> labelItems, Pane overlay) {
-        boolean isVoltageAssessment = currentCategory != null && "Voltage Profile Assessment".equals(currentCategory.group);
-        String valStr = isVoltageAssessment ? String.valueOf((int) Math.round(raw)) : formatValue(raw);
+        boolean isCountGroup = currentCategory != null && ("Voltage Profile Assessment".equals(currentCategory.group) || "Loading".equals(currentCategory.group));
+        String valStr = isCountGroup ? String.valueOf((int) Math.round(raw)) : formatValue(raw);
+
+        boolean isTransformer = currentCategory != null && "transformer_loading".equals(currentCategory.id);
+        boolean isLine = currentCategory != null && "line_loading".equals(currentCategory.id);
+        boolean isBus = currentCategory != null && "Voltage Profile Assessment".equals(currentCategory.group);
+        String entityName = isTransformer ? "transformer" : (isLine ? "transmission line" : (isBus ? "bus" : "record"));
 
         // 1. Rich interactive tooltip on the data point
-        String tipText = String.format("%s\n• Parameter: %s\n• Value: %s%s", seriesName, d.getXValue(), valStr,
-                isVoltageAssessment ? "\n💡 Click to inspect individual bus data table" : "");
+        String paramLabel = (currentCategory != null && currentCategory.axisLabel != null) ? currentCategory.axisLabel : "Parameter";
+        String valLabel = (currentCategory != null && currentCategory.unit != null) ? currentCategory.unit : "Value";
+        String tipText = String.format("%s\n• %s: %s\n• %s: %s%s", seriesName, paramLabel, d.getXValue(), valLabel, valStr,
+                isCountGroup ? ("\n💡 Click to inspect individual " + entityName + " data table") : "");
         Tooltip tip = new Tooltip(tipText);
         tip.setShowDelay(javafx.util.Duration.millis(50));
         tip.setStyle("-fx-font-size: 11.5px; -fx-font-weight: 500;");
@@ -1781,9 +1795,17 @@ public class AnalyticsDashboard {
         } else if ("voltage_deviation".equals(currentCategory.id)) {
             col1Header = "Bus Number";
             baseColHeader = "% deviation (Base Case)";
+        } else if ("transformer_loading".equals(currentCategory.id)) {
+            col1Header = "% Loading";
+            baseColHeader = "Number of Transformers (Base Case)";
+        } else if ("line_loading".equals(currentCategory.id)) {
+            col1Header = "% Loading";
+            baseColHeader = "Number of Transmission Lines (Base Case)";
         }
 
-        final boolean isIntValues = "voltage_profile".equals(currentCategory.id);
+        final boolean isIntValues = "voltage_profile".equals(currentCategory.id)
+                || "transformer_loading".equals(currentCategory.id)
+                || "line_loading".equals(currentCategory.id);
 
         TableColumn<MetricRow, String> labelCol = new TableColumn<>(col1Header);
         labelCol.setCellValueFactory(new PropertyValueFactory<>("label"));
@@ -1811,6 +1833,10 @@ public class AnalyticsDashboard {
                 valColHeader = cName + " (Degrees)";
             } else if ("voltage_deviation".equals(currentCategory.id)) {
                 valColHeader = cName + " (% deviation)";
+            } else if ("transformer_loading".equals(currentCategory.id)) {
+                valColHeader = cName + " (Number of Transformers)";
+            } else if ("line_loading".equals(currentCategory.id)) {
+                valColHeader = cName + " (Number of Transmission Lines)";
             }
 
             TableColumn<MetricRow, String> valCol = new TableColumn<>(valColHeader);
@@ -1844,6 +1870,28 @@ public class AnalyticsDashboard {
             Out0Results res = solvedCases.get(cs.id);
             if (res != null) {
                 all.addAll(res.buses);
+            }
+        }
+        return all;
+    }
+
+    private List<Transformer> getAllActiveTransformers() {
+        List<Transformer> all = new ArrayList<>(baseResults != null ? baseResults.transformers : List.of());
+        for (CaseStudy cs : activeSelectedCases) {
+            Out0Results res = solvedCases.get(cs.id);
+            if (res != null) {
+                all.addAll(res.transformers);
+            }
+        }
+        return all;
+    }
+
+    private List<Line> getAllActiveLines() {
+        List<Line> all = new ArrayList<>(baseResults != null ? baseResults.lines : List.of());
+        for (CaseStudy cs : activeSelectedCases) {
+            Out0Results res = solvedCases.get(cs.id);
+            if (res != null) {
+                all.addAll(res.lines);
             }
         }
         return all;
@@ -1884,7 +1932,7 @@ public class AnalyticsDashboard {
     }
 
     private void handleChartElementClick(String binLabel, double countVal, String seriesName) {
-        if (currentCategory == null || !"Voltage Profile Assessment".equals(currentCategory.group)) {
+        if (currentCategory == null) {
             return;
         }
 
@@ -1900,10 +1948,63 @@ public class AnalyticsDashboard {
                 }
             }
         }
+        if (targetResults == null) return;
+
+        String cleanLabel = binLabel != null ? binLabel.trim() : "";
+        if (cleanLabel.contains("(") && cleanLabel.endsWith(")")) {
+            cleanLabel = cleanLabel.substring(0, cleanLabel.indexOf('(')).trim();
+        }
+
+        if ("transformer_loading".equals(currentCategory.id)) {
+            double[] bounds = parseIntervalBounds(cleanLabel);
+            List<Transformer> matchingTransformers;
+            if (bounds != null) {
+                double bLo = bounds[0];
+                double bHi = bounds[1];
+                boolean isLast = isLastBinLabel(cleanLabel);
+                matchingTransformers = targetResults.transformers.stream()
+                        .filter(b -> b.loadingPercent >= bLo - 1e-7
+                                && (isLast ? b.loadingPercent <= bHi + 1e-7 : b.loadingPercent < bHi - 1e-7))
+                        .collect(Collectors.toList());
+            } else {
+                matchingTransformers = new ArrayList<>(targetResults.transformers);
+            }
+            String tabTitle = "Transformers @ " + cleanLabel;
+            if (seriesName != null && !seriesName.startsWith("Base") && !seriesName.contains("Ref")) {
+                tabTitle += " (" + seriesName + ")";
+            }
+            openBranchDrillDownTab(tabTitle, matchingTransformers, currentCategory, "Transformer");
+            return;
+        }
+
+        if ("line_loading".equals(currentCategory.id)) {
+            double[] bounds = parseIntervalBounds(cleanLabel);
+            List<Line> matchingLines;
+            if (bounds != null) {
+                double bLo = bounds[0];
+                double bHi = bounds[1];
+                boolean isLast = isLastBinLabel(cleanLabel);
+                matchingLines = targetResults.lines.stream()
+                        .filter(b -> b.loadingPercent >= bLo - 1e-7
+                                && (isLast ? b.loadingPercent <= bHi + 1e-7 : b.loadingPercent < bHi - 1e-7))
+                        .collect(Collectors.toList());
+            } else {
+                matchingLines = new ArrayList<>(targetResults.lines);
+            }
+            String tabTitle = "Transmission Lines @ " + cleanLabel;
+            if (seriesName != null && !seriesName.startsWith("Base") && !seriesName.contains("Ref")) {
+                tabTitle += " (" + seriesName + ")";
+            }
+            openBranchDrillDownTab(tabTitle, matchingLines, currentCategory, "Transmission Line");
+            return;
+        }
+
+        if (!"Voltage Profile Assessment".equals(currentCategory.group)) {
+            return;
+        }
 
         List<Bus> matchingBuses = new ArrayList<>();
-        String tabTitle = "Buses @ " + binLabel;
-        String cleanLabel = binLabel.trim();
+        String tabTitle = "Buses @ " + cleanLabel;
 
         if ("voltage_profile".equals(currentCategory.id)) {
             if (cleanLabel.equals("<0.5") || cleanLabel.startsWith("<")) {
@@ -2136,6 +2237,168 @@ public class AnalyticsDashboard {
         dataTableTabPane.getSelectionModel().select(newTab);
     }
 
+    private void openBranchDrillDownTab(String tabTitle, List<? extends Branch> matchingBranches, Category cat, String entityName) {
+        if (dataTableTabPane == null) return;
+
+        // Check if tab already exists
+        for (Tab t : dataTableTabPane.getTabs()) {
+            if (tabTitle.equals(t.getText())) {
+                dataTableTabPane.getSelectionModel().select(t);
+                return;
+            }
+        }
+
+        List<BranchDetailRow> detailRows = new ArrayList<>();
+        for (Branch b : matchingBranches) {
+            BranchDetailRow row = new BranchDetailRow(b);
+            for (CaseStudy cs : activeSelectedCases) {
+                Out0Results res = solvedCases.get(cs.id);
+                if (res != null) {
+                    Branch match = res.branches().stream()
+                            .filter(x -> x.getKind().equalsIgnoreCase(b.getKind()) && x.fromBus == b.fromBus && x.toBus == b.toBus)
+                            .findFirst().orElse(null);
+                    if (match != null) {
+                        row.caseLoadings.put(cs.name, match.loadingPercent);
+                        row.caseFlows.put(cs.name, match.mwFlow);
+                        row.caseLosses.put(cs.name, match.mwLoss);
+                    }
+                }
+            }
+            detailRows.add(row);
+        }
+
+        TableView<BranchDetailRow> drillTable = new TableView<>();
+        drillTable.setPrefHeight(300);
+
+        TableColumn<BranchDetailRow, Number> numCol = new TableColumn<>("#");
+        numCol.setCellValueFactory(new PropertyValueFactory<>("branchNumber"));
+        numCol.setPrefWidth(55);
+
+        TableColumn<BranchDetailRow, String> fromCol = new TableColumn<>("From Bus");
+        fromCol.setCellValueFactory(new PropertyValueFactory<>("fromBusDisplay"));
+        fromCol.setPrefWidth(140);
+
+        TableColumn<BranchDetailRow, String> toCol = new TableColumn<>("To Bus");
+        toCol.setCellValueFactory(new PropertyValueFactory<>("toBusDisplay"));
+        toCol.setPrefWidth(140);
+
+        TableColumn<BranchDetailRow, String> loadCol = new TableColumn<>("% Loading");
+        loadCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format(Locale.US, "%.2f%%", d.getValue().getLoadingPercent())));
+        loadCol.setPrefWidth(100);
+
+        TableColumn<BranchDetailRow, String> mwFlowCol = new TableColumn<>("MW Flow");
+        mwFlowCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format(Locale.US, "%.2f", d.getValue().getMwFlow())));
+        mwFlowCol.setPrefWidth(90);
+
+        TableColumn<BranchDetailRow, String> mvarFlowCol = new TableColumn<>("MVAr Flow");
+        mvarFlowCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format(Locale.US, "%.2f", d.getValue().getMvarFlow())));
+        mvarFlowCol.setPrefWidth(90);
+
+        TableColumn<BranchDetailRow, String> mwLossCol = new TableColumn<>("MW Loss");
+        mwLossCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format(Locale.US, "%.2f", d.getValue().getMwLoss())));
+        mwLossCol.setPrefWidth(85);
+
+        TableColumn<BranchDetailRow, String> mvarLossCol = new TableColumn<>("MVAr Loss");
+        mvarLossCol.setCellValueFactory(d -> new javafx.beans.property.SimpleStringProperty(String.format(Locale.US, "%.2f", d.getValue().getMvarLoss())));
+        mvarLossCol.setPrefWidth(85);
+
+        TableColumn<BranchDetailRow, String> statCol = new TableColumn<>("Loading Status");
+        statCol.setCellValueFactory(new PropertyValueFactory<>("loadingStatus"));
+        statCol.setPrefWidth(150);
+
+        drillTable.getColumns().addAll(numCol, fromCol, toCol, loadCol, mwFlowCol, mvarFlowCol, mwLossCol, mvarLossCol, statCol);
+
+        for (CaseStudy cs : activeSelectedCases) {
+            String cName = cs.name;
+            TableColumn<BranchDetailRow, String> caseLoadCol = new TableColumn<>(cName + " % Load");
+            caseLoadCol.setCellValueFactory(d -> {
+                Double val = d.getValue().caseLoadings.get(cName);
+                return new javafx.beans.property.SimpleStringProperty(val != null ? String.format(Locale.US, "%.2f%%", val) : "—");
+            });
+            caseLoadCol.setPrefWidth(115);
+
+            TableColumn<BranchDetailRow, String> caseFlowCol = new TableColumn<>(cName + " MW Flow");
+            caseFlowCol.setCellValueFactory(d -> {
+                Double val = d.getValue().caseFlows.get(cName);
+                return new javafx.beans.property.SimpleStringProperty(val != null ? String.format(Locale.US, "%.2f", val) : "—");
+            });
+            caseFlowCol.setPrefWidth(110);
+
+            drillTable.getColumns().addAll(caseLoadCol, caseFlowCol);
+        }
+
+        drillTable.getItems().setAll(detailRows);
+
+        HBox tabToolbar = new HBox(10);
+        tabToolbar.setAlignment(Pos.CENTER_LEFT);
+        tabToolbar.setPadding(new Insets(4, 8, 4, 8));
+        tabToolbar.setStyle("-fx-background-color: #F8FAFC; -fx-border-color: #CBD5E1; -fx-border-width: 0 0 1 0;");
+
+        Label badge = new Label("📊 " + tabTitle + " (" + detailRows.size() + " " + entityName.toLowerCase() + (detailRows.size() == 1 ? "" : "s") + ")");
+        badge.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #0F172A;");
+        HBox.setHgrow(badge, Priority.ALWAYS);
+
+        Button addDocBtn = new Button("➕ Add to Report");
+        addDocBtn.setStyle("-fx-background-color: #10B981; -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; -fx-background-radius: 4; -fx-padding: 3 8; -fx-cursor: hand;");
+        addDocBtn.setOnAction(e -> {
+            List<String> activeNames = activeSelectedCases.stream().map(c -> c.name).collect(Collectors.toList());
+            String summary = String.format("Drill-Down Data Table: %s with %d matching %s records in %s.", tabTitle, detailRows.size(), entityName, cat.title);
+            documentItems.add(new SavedCustomization.SavedChartItem(
+                    cat.id, tabTitle, "Data Table",
+                    cat.axisLabel, cat.unit, cat.unit,
+                    summary, "", activeNames
+            ));
+            refreshDocumentList();
+            Alert ok = new Alert(Alert.AlertType.INFORMATION, "Added '" + tabTitle + "' drill-down table to Document Builder.", ButtonType.OK);
+            ok.setHeaderText(null);
+            ok.show();
+        });
+
+        Button snapBtn = new Button("📷 Snapshot");
+        snapBtn.setStyle("-fx-background-color: #0284C7; -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; -fx-background-radius: 4; -fx-padding: 3 8; -fx-cursor: hand;");
+        snapBtn.setOnAction(e -> {
+            try {
+                WritableImage image = drillTable.snapshot(new SnapshotParameters(), null);
+                FileChooser fileChooser = new FileChooser();
+                fileChooser.setTitle("Save Drill-Down Table Snapshot");
+                fileChooser.setInitialFileName(tabTitle.replace(" ", "_").replace("<", "lt_").replace(">", "gt_").replace("@", "at").replace("%", "pct") + "_snapshot.png");
+                fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG Image", "*.png"));
+                File file = fileChooser.showSaveDialog(null);
+                if (file != null) {
+                    ImageIO.write(SwingFXUtils.fromFXImage(image, null), "png", file);
+                    Alert ok = new Alert(Alert.AlertType.INFORMATION, "Snapshot saved to " + file.getName(), ButtonType.OK);
+                    ok.setHeaderText(null);
+                    ok.show();
+                }
+            } catch (Exception ex) {
+                Alert err = new Alert(Alert.AlertType.ERROR, "Failed to capture snapshot: " + ex.getMessage(), ButtonType.OK);
+                err.setHeaderText(null);
+                err.show();
+            }
+        });
+
+        Tab newTab = new Tab(tabTitle);
+        newTab.setClosable(true);
+
+        Button closeBtn = new Button("❌ Close");
+        closeBtn.setStyle("-fx-background-color: #EF4444; -fx-text-fill: white; -fx-font-size: 11px; -fx-font-weight: bold; -fx-background-radius: 4; -fx-padding: 3 8; -fx-cursor: hand;");
+        closeBtn.setOnAction(e -> confirmCloseTableTab(newTab));
+
+        tabToolbar.getChildren().addAll(badge, addDocBtn, snapBtn, closeBtn);
+
+        VBox tabContent = new VBox(4, tabToolbar, drillTable);
+        VBox.setVgrow(drillTable, Priority.ALWAYS);
+        newTab.setContent(tabContent);
+
+        newTab.setOnCloseRequest(e -> {
+            e.consume();
+            confirmCloseTableTab(newTab);
+        });
+
+        dataTableTabPane.getTabs().add(newTab);
+        dataTableTabPane.getSelectionModel().select(newTab);
+    }
+
     private void confirmCloseTableTab(Tab tab) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Close Data Table Tab");
@@ -2249,10 +2512,64 @@ public class AnalyticsDashboard {
         public String getViolationStatus() { return violationStatus; }
     }
 
+    public static class BranchDetailRow {
+        public final int branchNumber;
+        public final String kind;
+        public final int fromBus;
+        public final String fromName;
+        public final int toBus;
+        public final String toName;
+        public final double loadingPercent;
+        public final double mwFlow;
+        public final double mvarFlow;
+        public final double mwLoss;
+        public final double mvarLoss;
+        public final String loadingStatus;
+        public final Map<String, Double> caseLoadings = new LinkedHashMap<>();
+        public final Map<String, Double> caseFlows = new LinkedHashMap<>();
+        public final Map<String, Double> caseLosses = new LinkedHashMap<>();
+
+        public BranchDetailRow(Branch b) {
+            this.branchNumber = b.number;
+            this.kind = b.getKind();
+            this.fromBus = b.fromBus;
+            this.fromName = b.fromName != null ? b.fromName : "";
+            this.toBus = b.toBus;
+            this.toName = b.toName != null ? b.toName : "";
+            this.loadingPercent = b.loadingPercent;
+            this.mwFlow = b.mwFlow;
+            this.mvarFlow = b.mvarFlow;
+            this.mwLoss = b.mwLoss;
+            this.mvarLoss = b.mvarLoss;
+            if (b.isOverloaded()) {
+                this.loadingStatus = "🔴 Overloaded (≥100%)";
+            } else if (b.isHighlyLoaded()) {
+                this.loadingStatus = "⚠️ High (80-100%)";
+            } else {
+                this.loadingStatus = "✅ Normal (<80%)";
+            }
+        }
+
+        public int getBranchNumber() { return branchNumber; }
+        public String getKind() { return kind; }
+        public int getFromBus() { return fromBus; }
+        public String getFromName() { return fromName; }
+        public int getToBus() { return toBus; }
+        public String getToName() { return toName; }
+        public String getFromBusDisplay() { return fromBus + (fromName.isEmpty() ? "" : " (" + fromName + ")"); }
+        public String getToBusDisplay() { return toBus + (toName.isEmpty() ? "" : " (" + toName + ")"); }
+        public double getLoadingPercent() { return loadingPercent; }
+        public double getMwFlow() { return mwFlow; }
+        public double getMvarFlow() { return mvarFlow; }
+        public double getMwLoss() { return mwLoss; }
+        public double getMvarLoss() { return mvarLoss; }
+        public String getLoadingStatus() { return loadingStatus; }
+    }
+
     private static String formatValue(double v) {
-        if (Math.abs(v) >= 1000) return String.format("%,.1f", v);
-        if (Math.abs(v) < 10 && v != Math.rint(v)) return String.format("%.4f", v);
-        return String.format("%.2f", v);
+        if (Math.abs(v) >= 1000) return String.format(Locale.US, "%,.1f", v);
+        if (Math.abs(v) < 10 && v != Math.rint(v)) return String.format(Locale.US, "%.4f", v);
+        return String.format(Locale.US, "%.2f", v);
     }
 
     public static final class MetricRow {
@@ -2393,24 +2710,24 @@ public class AnalyticsDashboard {
         };
         categories.add(voltageDev);
 
-        // 2. Thermal & Loading (Only Transformer Loading and Line Loading)
+        // 2. Loading (Only Transformer Loading and Line Loading)
         Category xfmrLoading = new Category();
         xfmrLoading.id = "transformer_loading";
-        xfmrLoading.shortName = "XFMR Load";
-        xfmrLoading.group = "Thermal & Loading";
-        xfmrLoading.title = "Transformer Loading Ranking (Thermal Utilization)";
-        xfmrLoading.axisLabel = "Transformer (From->To)";
-        xfmrLoading.unit = "% loading";
+        xfmrLoading.shortName = "XFMR Loading";
+        xfmrLoading.group = "Loading";
+        xfmrLoading.title = "Transformer Loading and Ranking";
+        xfmrLoading.axisLabel = "% Loading";
+        xfmrLoading.unit = "Number of Transformers";
         xfmrLoading.dat0Table = "Section 1.3 % Total 2Wdg Transformers (Columns: FromBus, ToBus, MVA Nominal Rating, % Tap)";
         xfmrLoading.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Equipment Kind = Transformer, % LOADING)";
         xfmrLoading.formulaProof = "% Loading = (√(MW_flow² + MVAr_flow²) / MVA_rating_xfmr) × 100%.";
         xfmrLoading.sourceColumns = "TRANSFORMER FLOWS -> % Loading";
         xfmrLoading.scalingSource = "Base Case transformer MVA thermal ratings";
-        xfmrLoading.description = "Ranks all transformers by thermal capacity utilization in the Base Case.";
+        xfmrLoading.description = "Distribution and ranking of all transformers by percentage thermal capacity utilization in the Base Case.";
         xfmrLoading.healthyRange = "< 80.0% continuous loading (100% maximum continuous thermal rating)";
         xfmrLoading.simpleExplanation = "Substation power transformers are the most expensive assets on the power grid. Operating them over 100% causes rapid winding paper insulation degradation (Arrhenius Law: every 10°C rise doubles insulation aging rate).";
         xfmrLoading.action = "Overloaded transformers experience accelerated insulation aging (Arrhenius law: every 10°C rise halves insulation life). They are priority candidates for on-load tap changer adjustment, parallel transformer addition, or generator re-dispatch to reduce transfer.";
-        xfmrLoading.topN = 20;
+        xfmrLoading.topN = 0;
         xfmrLoading.rowsFn = this::transformerLoadingRows;
         xfmrLoading.insightFn = (base, cases) -> {
             long ovl = base.branches().stream()
@@ -2422,21 +2739,21 @@ public class AnalyticsDashboard {
 
         Category lineLoading = new Category();
         lineLoading.id = "line_loading";
-        lineLoading.shortName = "Line Load";
-        lineLoading.group = "Thermal & Loading";
-        lineLoading.title = "Transmission Line Loading Ranking (Thermal Utilization)";
-        lineLoading.axisLabel = "Line (From->To)";
-        lineLoading.unit = "% loading";
+        lineLoading.shortName = "Line Loading";
+        lineLoading.group = "Loading";
+        lineLoading.title = "Transmission Line Loading and Ranking";
+        lineLoading.axisLabel = "% Loading";
+        lineLoading.unit = "Number of Transmission Lines";
         lineLoading.dat0Table = "Section 1.5 % Total Lines (Columns: FromBus, ToBus, R, X, B, MVA Rating)";
         lineLoading.out0Table = "|***** LINE & TRANSFORMER FLOWS *****| (Filter: Equipment Kind = Line, % LOADING)";
         lineLoading.formulaProof = "% Loading = (√(MW_flow² + MVAr_flow²) / MVA_rating_line) × 100%.";
         lineLoading.sourceColumns = "LINE FLOWS -> % Loading";
         lineLoading.scalingSource = "Base Case line thermal ratings (normal/emergency)";
-        lineLoading.description = "Ranks all transmission lines (excluding transformers) by thermal capacity utilization.";
+        lineLoading.description = "Distribution and ranking of all transmission lines (excluding transformers) by percentage thermal capacity utilization.";
         lineLoading.healthyRange = "< 80.0% continuous loading (Ground clearance & thermal sag limit: 100%)";
         lineLoading.simpleExplanation = "Ranks overhead transmission lines by percentage thermal loading. Overheated aluminum conductors expand and sag into trees or roadways, risking short-circuit ground faults.";
         lineLoading.action = "Highly loaded lines experience increased conductor sag (clearance violation risk at peak temperatures), high I²R Joule losses, and reduced N-1 security. Identify these for emergency rating checks, reconductoring, or generation redispatch to relieve congestion.";
-        lineLoading.topN = 20;
+        lineLoading.topN = 0;
         lineLoading.rowsFn = this::lineLoadingRows;
         lineLoading.insightFn = (base, cases) -> {
             double avgLoad = base.branches().stream()
@@ -3018,19 +3335,139 @@ public class AnalyticsDashboard {
     }
 
     private List<MetricRow> transformerLoadingRows(Out0Results target, Out0Results scaleRef) {
-        return target.branches().stream()
-                .filter(b -> "Transformer".equalsIgnoreCase(b.getKind()))
-                .sorted((a, b) -> Double.compare(b.loadingPercent, a.loadingPercent))
-                .map(b -> new MetricRow("XFMR " + b.fromBus + "->" + b.toBus, b.loadingPercent))
-                .collect(Collectors.toList());
+        List<Transformer> allXfmrs = getAllActiveTransformers();
+        if (allXfmrs.isEmpty()) {
+            return List.of(new MetricRow("0.0% to 100.0%", 0.0));
+        }
+
+        double minLoad = allXfmrs.stream().mapToDouble(b -> b.loadingPercent).min().orElse(0.0);
+        double maxLoad = allXfmrs.stream().mapToDouble(b -> b.loadingPercent).max().orElse(100.0);
+        minLoad = Math.max(0.0, minLoad);
+        maxLoad = Math.max(minLoad + 1.0, maxLoad);
+        double span = maxLoad - minLoad;
+
+        double bin;
+        if (span <= 20.0) {
+            bin = 5.0;
+        } else if (span <= 50.0) {
+            bin = 10.0;
+        } else if (span <= 120.0) {
+            bin = 10.0;
+        } else if (span <= 200.0) {
+            bin = 20.0;
+        } else {
+            bin = 25.0;
+        }
+
+        double lo = Math.floor(minLoad / bin) * bin;
+        double hi = Math.ceil(maxLoad / bin) * bin;
+        if (hi <= lo) hi = lo + bin;
+        int nBins = Math.max(1, (int) Math.round((hi - lo) / bin));
+
+        int firstPopulated = -1;
+        int lastPopulated = -1;
+
+        for (int i = 0; i < nBins; i++) {
+            double bLo = lo + i * bin;
+            double bHi = bLo + bin;
+            boolean isLast = (i == nBins - 1);
+            long totalInBin = allXfmrs.stream()
+                    .filter(b -> b.loadingPercent >= bLo - 1e-7 && (isLast ? b.loadingPercent <= bHi + 1e-7 : b.loadingPercent < bHi - 1e-7))
+                    .count();
+            if (totalInBin > 0) {
+                if (firstPopulated == -1) firstPopulated = i;
+                lastPopulated = i;
+            }
+        }
+
+        if (firstPopulated == -1) {
+            firstPopulated = 0;
+            lastPopulated = Math.min(0, nBins - 1);
+        }
+
+        List<MetricRow> rows = new ArrayList<>();
+        for (int i = firstPopulated; i <= lastPopulated; i++) {
+            double bLo = lo + i * bin;
+            double bHi = bLo + bin;
+            boolean isLast = (i == lastPopulated);
+            long count = target.transformers.stream()
+                    .filter(b -> b.loadingPercent >= bLo - 1e-7 && (isLast ? b.loadingPercent <= bHi + 1e-7 : b.loadingPercent < bHi - 1e-7))
+                    .count();
+
+            String label = (bin >= 1.0 && bin == Math.rint(bin))
+                    ? String.format(Locale.US, "%.1f%% to %.1f%%", bLo, bHi)
+                    : String.format(Locale.US, "%.2f%% to %.2f%%", bLo, bHi);
+            rows.add(new MetricRow(label, (double) count));
+        }
+        return rows;
     }
 
     private List<MetricRow> lineLoadingRows(Out0Results target, Out0Results scaleRef) {
-        return target.branches().stream()
-                .filter(b -> "Line".equalsIgnoreCase(b.getKind()))
-                .sorted((a, b) -> Double.compare(b.loadingPercent, a.loadingPercent))
-                .map(b -> new MetricRow("LINE " + b.fromBus + "->" + b.toBus, b.loadingPercent))
-                .collect(Collectors.toList());
+        List<Line> allLines = getAllActiveLines();
+        if (allLines.isEmpty()) {
+            return List.of(new MetricRow("0.0% to 100.0%", 0.0));
+        }
+
+        double minLoad = allLines.stream().mapToDouble(b -> b.loadingPercent).min().orElse(0.0);
+        double maxLoad = allLines.stream().mapToDouble(b -> b.loadingPercent).max().orElse(100.0);
+        minLoad = Math.max(0.0, minLoad);
+        maxLoad = Math.max(minLoad + 1.0, maxLoad);
+        double span = maxLoad - minLoad;
+
+        double bin;
+        if (span <= 20.0) {
+            bin = 5.0;
+        } else if (span <= 50.0) {
+            bin = 10.0;
+        } else if (span <= 120.0) {
+            bin = 10.0;
+        } else if (span <= 200.0) {
+            bin = 20.0;
+        } else {
+            bin = 25.0;
+        }
+
+        double lo = Math.floor(minLoad / bin) * bin;
+        double hi = Math.ceil(maxLoad / bin) * bin;
+        if (hi <= lo) hi = lo + bin;
+        int nBins = Math.max(1, (int) Math.round((hi - lo) / bin));
+
+        int firstPopulated = -1;
+        int lastPopulated = -1;
+
+        for (int i = 0; i < nBins; i++) {
+            double bLo = lo + i * bin;
+            double bHi = bLo + bin;
+            boolean isLast = (i == nBins - 1);
+            long totalInBin = allLines.stream()
+                    .filter(b -> b.loadingPercent >= bLo - 1e-7 && (isLast ? b.loadingPercent <= bHi + 1e-7 : b.loadingPercent < bHi - 1e-7))
+                    .count();
+            if (totalInBin > 0) {
+                if (firstPopulated == -1) firstPopulated = i;
+                lastPopulated = i;
+            }
+        }
+
+        if (firstPopulated == -1) {
+            firstPopulated = 0;
+            lastPopulated = Math.min(0, nBins - 1);
+        }
+
+        List<MetricRow> rows = new ArrayList<>();
+        for (int i = firstPopulated; i <= lastPopulated; i++) {
+            double bLo = lo + i * bin;
+            double bHi = bLo + bin;
+            boolean isLast = (i == lastPopulated);
+            long count = target.lines.stream()
+                    .filter(b -> b.loadingPercent >= bLo - 1e-7 && (isLast ? b.loadingPercent <= bHi + 1e-7 : b.loadingPercent < bHi - 1e-7))
+                    .count();
+
+            String label = (bin >= 1.0 && bin == Math.rint(bin))
+                    ? String.format(Locale.US, "%.1f%% to %.1f%%", bLo, bHi)
+                    : String.format(Locale.US, "%.2f%% to %.2f%%", bLo, bHi);
+            rows.add(new MetricRow(label, (double) count));
+        }
+        return rows;
     }
 
     private List<MetricRow> lineFlowRows(Out0Results target, Out0Results scaleRef) {
